@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="ja" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>LeafHotKey — WebUI mockup</title>
+    <style>
+      :root {
+        --label: #1d1d1f;
+        --label-secondary: rgba(29, 29, 31, 0.6);
+        --label-tertiary: rgba(29, 29, 31, 0.3);
+        --accent: #0071e3;
+        --accent-hover: #0077ed;
+        --accent-pressed: #005bb5;
+        --success: #1d7a3d;
+        --danger: #c4001f;
+        --surface: #ffffff;
+        --surface-secondary: #f5f5f7;
+        --surface-tertiary: #e8e8ed;
+        --separator: rgba(0, 0, 0, 0.08);
+        --fill: rgba(120, 120, 128, 0.16);
+        --surface-dark: #000000;
+        --surface-secondary-dark: #1d1d1f;
+        --label-dark: #f5f5f7;
+        --label-secondary-dark: rgba(245, 245, 247, 0.6);
+        --danger-dark: #ff453a;
+      }
+
+      html[data-theme="dark"] {
+        --label: var(--label-dark);
+        --label-secondary: var(--label-secondary-dark);
+        --label-tertiary: color-mix(in srgb, var(--label) 30%, transparent);
+        --surface: var(--surface-secondary-dark);
+        --surface-secondary: var(--surface-dark);
+        /* DESIGN.mdにdarkのtertiary/separator値がないため、既存tokenを再利用する。 */
+        --surface-tertiary: var(--surface-secondary-dark);
+        --separator: var(--fill);
+        --danger: var(--danger-dark);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body { min-height: 100%; }
+
+      body {
+        margin: 0;
+        background: var(--surface-secondary);
+        color: var(--label);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif;
+        font-size: 16px;
+        line-height: 1.4;
+        transition: background-color 160ms ease, color 160ms ease;
+      }
+
+      button, input, select { font: inherit; }
+      button { color: inherit; }
+      button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+      .app-shell {
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        display: flex;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        flex-direction: column;
+        background: var(--surface);
+        border-right: 1px solid var(--separator);
+      }
+
+      .brand-bar {
+        display: flex;
+        height: 56px;
+        align-items: center;
+        gap: 8px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--separator);
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        flex: 0 0 auto;
+        border-radius: 8px;
+        background: var(--label);
+        color: var(--surface);
+      }
+
+      .brand-mark svg { width: 17px; height: 17px; }
+      .brand-name { min-width: 0; font-size: 15px; font-weight: 650; }
+      .brand-meta { margin-top: 1px; color: var(--label-secondary); font-size: 11px; }
+
+      .sidebar-scroll { min-height: 0; flex: 1; overflow: auto; padding: 24px 12px 16px; }
+      .nav-label {
+        padding: 0 8px;
+        color: var(--label-tertiary);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .nav-list { display: grid; gap: 4px; margin: 8px 0 24px; }
+      .nav-item {
+        display: flex;
+        width: 100%;
+        min-height: 40px;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+        color: var(--label-secondary);
+        font-size: 14px;
+      }
+      .nav-item:hover { background: var(--surface-secondary); color: var(--label); }
+      .nav-item[aria-current="page"] {
+        background: var(--surface-secondary);
+        color: var(--accent);
+        font-weight: 600;
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+      }
+      .nav-item svg { width: 17px; height: 17px; flex: 0 0 auto; }
+      .nav-count {
+        min-width: 20px;
+        margin-left: auto;
+        padding: 1px 6px;
+        border-radius: 9999px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 11px;
+        line-height: 18px;
+        text-align: center;
+      }
+
+      .sidebar-note {
+        margin-top: 16px;
+        padding: 16px;
+        border: 1px solid var(--separator);
+        border-radius: 14px;
+        background: var(--surface-secondary);
+      }
+      .sidebar-note-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; }
+      .sidebar-note p { margin: 8px 0 0; color: var(--label-secondary); font-size: 12px; line-height: 1.5; }
+
+      .sidebar-footer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--separator);
+        color: var(--label-secondary);
+        font-size: 12px;
+      }
+      .sidebar-footer span:first-of-type { min-width: 0; flex: 1; }
+      .online-dot, .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 9999px; background: var(--success); }
+      .offline-dot { background: var(--label-tertiary); }
+      .icon-button {
+        display: inline-grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        cursor: pointer;
+        color: var(--label-secondary);
+      }
+      .icon-button:hover { background: var(--surface-secondary); color: var(--label); }
+      .icon-button svg { width: 17px; height: 17px; }
+
+      .main-column { min-width: 0; }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        display: flex;
+        min-height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 8px 32px;
+        border-bottom: 1px solid var(--separator);
+        background: color-mix(in srgb, var(--surface-secondary) 88%, transparent);
+        backdrop-filter: blur(20px);
+      }
+      .breadcrumbs { display: flex; min-width: 0; align-items: center; gap: 8px; color: var(--label-secondary); font-size: 13px; }
+      .breadcrumbs strong { color: var(--label); font-weight: 600; }
+      .breadcrumbs svg { width: 14px; height: 14px; }
+      .topbar-actions { display: flex; align-items: center; gap: 8px; }
+      .connection-badge {
+        display: inline-flex;
+        min-height: 28px;
+        align-items: center;
+        gap: 7px;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        background: var(--surface);
+        color: var(--label-secondary);
+        font-size: 12px;
+      }
+      .connection-badge .online-dot { width: 7px; height: 7px; }
+
+      .content {
+        width: min(100%, 1024px);
+        margin: 0 auto;
+        padding: 32px;
+      }
+      .view { display: none; }
+      .view.is-active { display: block; }
+      .page-intro { margin-bottom: 24px; }
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--label-secondary);
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 8px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+      h2 { margin-bottom: 6px; font-size: 21px; font-weight: 650; line-height: 1.25; }
+      h3 { margin-bottom: 4px; font-size: 15px; font-weight: 650; }
+      .intro-copy { max-width: 620px; margin-bottom: 0; color: var(--label-secondary); font-size: 15px; }
+
+      .card {
+        border: 1px solid var(--separator);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+      .card + .card { margin-top: 16px; }
+      .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 24px 0; }
+      .card-body { padding: 24px; }
+      .muted { color: var(--label-secondary); }
+      .fine { color: var(--label-tertiary); font-size: 12px; }
+
+      .status-card { overflow: hidden; }
+      .status-card-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 24px; }
+      .status-title { display: flex; align-items: center; gap: 10px; }
+      .status-title h2 { margin-bottom: 0; }
+      .status-dot { width: 10px; height: 10px; }
+      .status-card-copy { max-width: 540px; margin: 10px 0 0; color: var(--label-secondary); font-size: 14px; }
+      .status-context { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+      .context-chip {
+        display: inline-flex;
+        min-height: 30px;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 10px;
+        border-radius: 9999px;
+        background: var(--surface-secondary);
+        color: var(--label-secondary);
+        font-size: 12px;
+      }
+      .context-chip strong { color: var(--label); font-weight: 600; }
+      .status-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+      .status-card-footer {
+        display: flex;
+        min-height: 48px;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        border-top: 1px solid var(--separator);
+        background: var(--surface-secondary);
+        color: var(--label-secondary);
+        font-size: 12px;
+      }
+      .status-card-footer svg { width: 15px; height: 15px; color: var(--success); }
+
+      .button {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 20px;
+        border: 0;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 15px;
+        font-weight: 550;
+        line-height: 1.2;
+        transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+      }
+      .button:active { transform: translateY(1px); }
+      .button svg { width: 16px; height: 16px; }
+      .button-primary { background: var(--accent); color: #fff; }
+      .button-primary:hover { background: var(--accent-hover); }
+      .button-primary:active { background: var(--accent-pressed); }
+      .button-secondary { background: var(--fill); color: var(--accent); }
+      .button-secondary:hover { background: var(--surface-tertiary); }
+      .button-destructive { border: 1px solid color-mix(in srgb, var(--danger) 42%, transparent); background: var(--surface); color: var(--danger); }
+      .button-small { min-height: 36px; padding: 8px 14px; font-size: 13px; }
+
+      .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+      .summary-card { min-height: 130px; padding: 20px; }
+      .summary-label { color: var(--label-secondary); font-size: 12px; }
+      .summary-value { margin: 10px 0 4px; font-size: 23px; font-weight: 650; letter-spacing: -0.02em; }
+      .summary-detail { color: var(--label-secondary); font-size: 12px; }
+      .summary-detail strong { color: var(--success); font-weight: 600; }
+
+      .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 32px 0 12px; }
+      .section-heading h2 { margin-bottom: 0; font-size: 18px; }
+      .text-link { border: 0; background: transparent; cursor: pointer; color: var(--accent); font-size: 13px; }
+      .text-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+      .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); gap: 16px; }
+      .list-card { overflow: hidden; }
+      .list-row {
+        display: flex;
+        min-height: 68px;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 20px;
+        border-top: 1px solid var(--separator);
+      }
+      .list-row:first-child { border-top: 0; }
+      .app-icon {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        flex: 0 0 auto;
+        border-radius: 10px;
+        background: var(--surface-tertiary);
+        color: var(--label-secondary);
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .list-primary { min-width: 0; flex: 1; }
+      .list-primary strong { display: block; overflow: hidden; color: var(--label); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+      .list-primary span { display: block; overflow: hidden; margin-top: 3px; color: var(--label-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+      .list-side { flex: 0 0 auto; text-align: right; }
+      .badge {
+        display: inline-flex;
+        min-height: 24px;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 9999px;
+        background: var(--surface-tertiary);
+        color: var(--label-secondary);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .badge-success { background: color-mix(in srgb, var(--success) 12%, var(--surface)); color: var(--success); }
+      .badge-accent { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent); }
+      .badge-danger { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
+      .row-meta { display: block; margin-top: 4px; color: var(--label-tertiary); font-size: 11px; }
+
+      .activity-list { padding: 8px 20px 16px; }
+      .activity-item { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--separator); }
+      .activity-item:last-child { border-bottom: 0; }
+      .activity-marker { width: 7px; height: 7px; margin-top: 6px; border-radius: 9999px; background: var(--accent); }
+      .activity-item p { margin: 0; font-size: 13px; }
+      .activity-item small { color: var(--label-tertiary); font-size: 11px; white-space: nowrap; }
+
+      .settings-tabs { display: flex; gap: 4px; overflow-x: auto; padding: 4px; border: 1px solid var(--separator); border-radius: 10px; background: var(--surface-tertiary); }
+      .settings-tab { min-height: 40px; padding: 8px 16px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; color: var(--label-secondary); font-size: 13px; white-space: nowrap; }
+      .settings-tab.is-selected { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
+      .settings-section { margin-top: 24px; }
+      .settings-section h2 { margin-bottom: 4px; font-size: 18px; }
+      .settings-section > p { margin-bottom: 12px; color: var(--label-secondary); font-size: 13px; }
+      .settings-list { overflow: hidden; }
+      .settings-row { display: flex; min-height: 66px; align-items: center; gap: 16px; padding: 12px 20px; border-top: 1px solid var(--separator); }
+      .settings-row:first-child { border-top: 0; }
+      .settings-row-main { min-width: 0; flex: 1; }
+      .settings-row-main label, .settings-row-main strong { display: block; font-size: 14px; font-weight: 600; }
+      .settings-row-main p { margin: 3px 0 0; color: var(--label-secondary); font-size: 12px; }
+
+      .switch {
+        position: relative;
+        width: 48px;
+        height: 28px;
+        flex: 0 0 auto;
+        padding: 0;
+        border: 0;
+        border-radius: 9999px;
+        background: var(--fill);
+        cursor: pointer;
+        transition: background-color 120ms ease;
+      }
+      .switch::after { content: ""; position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16); transition: transform 120ms ease; }
+      .switch[aria-checked="true"] { background: var(--success); }
+      .switch[aria-checked="true"]::after { transform: translateX(20px); }
+
+      .process-table { overflow: hidden; }
+      .process-header, .process-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(116px, 0.7fr) minmax(110px, 0.6fr); align-items: center; gap: 16px; padding: 12px 20px; }
+      .process-header { min-height: 42px; background: var(--surface-secondary); color: var(--label-secondary); font-size: 11px; font-weight: 650; letter-spacing: 0.04em; }
+      .process-row { min-height: 66px; border-top: 1px solid var(--separator); font-size: 13px; }
+      .process-name { min-width: 0; overflow: hidden; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+      .process-note { color: var(--label-secondary); font-size: 12px; }
+      .process-row .badge { justify-self: start; }
+
+      .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .field { display: grid; gap: 7px; }
+      .field-full { grid-column: 1 / -1; }
+      .field label { color: var(--label-secondary); font-size: 13px; }
+      .field input, .field select {
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 12px;
+        border: 1px solid var(--separator);
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--label);
+      }
+      .field input::placeholder { color: var(--label-tertiary); }
+      .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+      .empty-state { padding: 40px 24px; text-align: center; }
+      .empty-state svg { width: 28px; height: 28px; margin-bottom: 12px; color: var(--label-tertiary); }
+      .empty-state p { margin-bottom: 16px; color: var(--label-secondary); font-size: 14px; }
+
+      dialog {
+        width: min(440px, calc(100vw - 32px));
+        padding: 0;
+        border: 1px solid var(--separator);
+        border-radius: 20px;
+        background: var(--surface);
+        color: var(--label);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+      }
+      dialog::backdrop { background: rgba(0, 0, 0, 0.22); backdrop-filter: blur(4px); }
+      .dialog-body { padding: 24px; }
+      .dialog-body h2 { margin-bottom: 8px; }
+      .dialog-body > p { margin-bottom: 20px; color: var(--label-secondary); font-size: 13px; }
+
+      .mobile-menu { display: none; }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+      @media (max-width: 900px) {
+        .app-shell { grid-template-columns: 80px minmax(0, 1fr); }
+        .brand-bar { justify-content: center; padding: 0; }
+        .brand-copy, .nav-label, .nav-item span, .sidebar-note, .sidebar-footer span, .sidebar-footer .icon-button { display: none; }
+        .sidebar-scroll { padding: 24px 12px; }
+        .nav-item { justify-content: center; padding: 8px; }
+        .nav-item svg { width: 19px; height: 19px; }
+        .nav-count { position: absolute; margin: -24px 0 0 22px; min-width: 17px; padding: 0 4px; font-size: 10px; line-height: 16px; }
+        .sidebar-footer { justify-content: center; padding: 16px 8px; }
+        .sidebar-footer .online-dot { width: 8px; height: 8px; }
+        .topbar { padding-right: 24px; padding-left: 24px; }
+        .content { padding: 24px; }
+      }
+
+      @media (max-width: 680px) {
+        .app-shell { display: block; }
+        .sidebar { display: none; }
+        .mobile-menu { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--separator); background: var(--surface); }
+        .mobile-brand { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 650; }
+        .topbar { min-height: 48px; padding: 8px 16px; }
+        .connection-badge { display: none; }
+        .content { padding: 24px 16px 32px; }
+        h1 { font-size: 27px; }
+        .status-card-main { display: block; }
+        .status-actions { justify-content: flex-start; margin-top: 20px; }
+        .summary-grid, .dashboard-grid, .form-grid { grid-template-columns: 1fr; }
+        .summary-card { min-height: auto; }
+        .process-header { display: none; }
+        .process-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px 16px; }
+        .process-row .process-note { grid-column: 1; grid-row: 2; }
+        .process-row .badge { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+        .card-header, .card-body { padding-right: 16px; padding-left: 16px; }
+        .list-row { padding-right: 16px; padding-left: 16px; }
+        .section-heading { margin-top: 24px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="LeafHotKeyナビゲーション">
+        <div class="brand-bar">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 15.5c2.1-6.2 7.1-8.8 12-9-0.2 4.9-2.8 9.9-9 12" />
+              <path d="M5 19c2.7-3.9 5.6-6.4 9.2-8.3" />
+            </svg>
+          </div>
+          <div class="brand-copy">
+            <div class="brand-name">LeafHotKey</div>
+            <div class="brand-meta">Windows utility</div>
+          </div>
+        </div>
+
+        <div class="sidebar-scroll">
+          <div class="nav-label">管理</div>
+          <nav class="nav-list" aria-label="メインナビゲーション">
+            <button class="nav-item" type="button" data-view-target="overview" aria-current="page">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              <span>概要</span>
+            </button>
+            <button class="nav-item" type="button" data-view-target="profiles">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16M4 12h16M4 17.5h16"/><circle cx="8" cy="6.5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="10" cy="17.5" r="1.5"/></svg>
+              <span>プロファイル</span>
+              <span class="nav-count">13</span>
+            </button>
+            <button class="nav-item" type="button" data-view-target="safety">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 20 6v5c0 5.2-3.4 8.5-8 10-4.6-1.5-8-4.8-8-10V6l8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+              <span>ゲーム保護</span>
+            </button>
+          </nav>
+
+          <div class="nav-label">システム</div>
+          <nav class="nav-list" aria-label="システムナビゲーション">
+            <button class="nav-item" type="button" data-view-target="settings">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+              <span>設定</span>
+            </button>
+          </nav>
+
+          <div class="sidebar-note">
+            <div class="sidebar-note-title"><span class="online-dot" aria-hidden="true"></span>安全に常駐中</div>
+            <p>保護対象のゲームを検知すると、入力エンジンを停止して本体を終了します。</p>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <span class="online-dot" aria-hidden="true"></span>
+          <span>トレイ常駐中</span>
+          <button class="icon-button" type="button" data-theme-toggle aria-label="ダークモードに切り替え" title="テーマ切替">
+            <svg aria-hidden="true" data-theme-icon="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 15.3A8.5 8.5 0 0 1 8.7 3.5 8.5 8.5 0 1 0 20.5 15.3Z"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <div class="main-column">
+        <div class="mobile-menu">
+          <div class="mobile-brand"><div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15.5c2.1-6.2 7.1-8.8 12-9-0.2 4.9-2.8 9.9-9 12"/><path d="M5 19c2.7-3.9 5.6-6.4 9.2-8.3"/></svg></div>LeafHotKey</div>
+          <button class="icon-button" type="button" data-theme-toggle aria-label="ダークモードに切り替え" title="テーマ切替"><svg aria-hidden="true" data-theme-icon="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 15.3A8.5 8.5 0 0 1 8.7 3.5 8.5 8.5 0 1 0 20.5 15.3Z"/></svg></button>
+        </div>
+
+        <header class="topbar">
+          <div class="breadcrumbs" aria-label="現在位置"><strong>概要</strong><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><span id="breadcrumb-current">常駐ステータス</span></div>
+          <div class="topbar-actions">
+            <div class="connection-badge"><span class="online-dot" aria-hidden="true"></span>Windowsホスト接続済み</div>
+          </div>
+        </header>
+
+        <main class="content">
+          <section class="view is-active" data-view="overview" aria-labelledby="overview-title">
+            <div class="page-intro">
+              <p class="eyebrow">常駐ステータス</p>
+              <h1 id="overview-title">LeafHotKey</h1>
+              <p class="intro-copy">アプリごとのキー変換と、ゲーム起動時の安全な停止をひとつの場所で管理します。</p>
+            </div>
+
+            <section class="card status-card" aria-labelledby="runtime-status-title">
+              <div class="status-card-main">
+                <div>
+                  <div class="status-title"><span class="status-dot" id="runtime-dot" aria-hidden="true"></span><h2 id="runtime-status-title">入力変換は有効です</h2></div>
+                  <p class="status-card-copy" id="runtime-copy">前面アプリに合わせて、登録済みのプロファイルを適用しています。</p>
+                  <div class="status-context">
+                    <span class="context-chip"><span>前面</span><strong>CLIPStudioPaint.exe</strong></span>
+                    <span class="context-chip"><span>プロファイル</span><strong>Clip Studio Paint</strong></span>
+                  </div>
+                </div>
+                <div class="status-actions">
+                  <button class="button button-secondary" type="button" id="pause-button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span>一時停止</span></button>
+                  <button class="button button-primary" type="button" data-view-target="profiles"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16M4 12h16M4 17.5h16"/><circle cx="8" cy="6.5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="10" cy="17.5" r="1.5"/></svg>設定を確認</button>
+                </div>
+              </div>
+              <div class="status-card-footer"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 20 6v5c0 5.2-3.4 8.5-8 10-4.6-1.5-8-4.8-8-10V6l8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span>ゲーム保護が有効です。危険なプロセスを検知すると入力エンジンを停止します。</span></div>
+            </section>
+
+            <div class="summary-grid" aria-label="概要メトリクス">
+              <article class="card summary-card"><div class="summary-label">有効なプロファイル</div><div class="summary-value">13</div><div class="summary-detail"><strong>すべて正常</strong> · 最終変更 2分前</div></article>
+              <article class="card summary-card"><div class="summary-label">登録ショートカット</div><div class="summary-value">128</div><div class="summary-detail">入力変換 116 · 保持 12</div></article>
+              <article class="card summary-card"><div class="summary-label">監視プロセス</div><div class="summary-value">6</div><div class="summary-detail"><strong>監視中</strong> · 現在該当なし</div></article>
+            </div>
+
+            <div class="section-heading"><h2>主要プロファイル</h2><button class="text-link" type="button" data-view-target="profiles">すべて表示</button></div>
+            <div class="dashboard-grid">
+              <section class="card list-card" aria-labelledby="profile-list-title">
+                <div class="card-header"><div><h3 id="profile-list-title">最近使ったプロファイル</h3><p class="fine">前面ウィンドウに応じて自動適用</p></div><span class="badge badge-accent">自動適用</span></div>
+                <div class="list-row"><div class="app-icon" aria-hidden="true">CS</div><div class="list-primary"><strong>Clip Studio Paint</strong><span>CLIPStudioPaint.exe</span></div><div class="list-side"><span class="badge badge-success">有効</span><span class="row-meta">現在適用中</span></div></div>
+                <div class="list-row"><div class="app-icon" aria-hidden="true">Ps</div><div class="list-primary"><strong>Photoshop</strong><span>Photoshop.exe</span></div><div class="list-side"><span class="badge badge-success">有効</span><span class="row-meta">5分前</span></div></div>
+                <div class="list-row"><div class="app-icon" aria-hidden="true">Bl</div><div class="list-primary"><strong>Blender</strong><span>blender.exe</span></div><div class="list-side"><span class="badge badge-success">有効</span><span class="row-meta">昨日</span></div></div>
+              </section>
+
+              <section class="card list-card" aria-labelledby="activity-title">
+                <div class="card-header"><div><h3 id="activity-title">最近のイベント</h3><p class="fine">このデバイスの履歴</p></div><span class="badge">直近3件</span></div>
+                <div class="activity-list">
+                  <div class="activity-item"><span class="activity-marker" aria-hidden="true"></span><p>Clip Studio Paintに切り替え</p><small>2分前</small></div>
+                  <div class="activity-item"><span class="activity-marker" aria-hidden="true"></span><p>設定を保存しました</p><small>8分前</small></div>
+                  <div class="activity-item"><span class="activity-marker" aria-hidden="true"></span><p>LeafHotKeyを起動しました</p><small>今日</small></div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="view" data-view="profiles" aria-labelledby="profiles-title">
+            <div class="page-intro"><p class="eyebrow">設定</p><h1 id="profiles-title">プロファイル</h1><p class="intro-copy">前面アプリごとのキー変換を管理します。変更は保存後に入力エンジンへ反映されます。</p></div>
+            <div class="card">
+              <div class="card-header"><div><h2>アプリ別の設定</h2><p class="fine">13件のプロファイル · 有効 13件</p></div><button class="button button-primary button-small" type="button" id="add-profile"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>プロファイルを追加</button></div>
+              <div class="settings-list" style="margin-top:16px">
+                <div class="settings-row"><div class="app-icon" aria-hidden="true">CS</div><div class="settings-row-main"><strong>Clip Studio Paint</strong><p>CLIPStudioPaint.exe · 24ショートカット</p></div><span class="badge badge-success">有効</span><button class="button button-secondary button-small" type="button">編集</button></div>
+                <div class="settings-row"><div class="app-icon" aria-hidden="true">Ps</div><div class="settings-row-main"><strong>Photoshop</strong><p>Photoshop.exe · 25ショートカット</p></div><span class="badge badge-success">有効</span><button class="button button-secondary button-small" type="button">編集</button></div>
+                <div class="settings-row"><div class="app-icon" aria-hidden="true">Bl</div><div class="settings-row-main"><strong>Blender</strong><p>blender.exe · 24ショートカット</p></div><span class="badge badge-success">有効</span><button class="button button-secondary button-small" type="button">編集</button></div>
+                <div class="settings-row"><div class="app-icon" aria-hidden="true">UE</div><div class="settings-row-main"><strong>Unreal Engine</strong><p>UE4Editor.exe / UnrealEditor.exe · 17ショートカット</p></div><span class="badge badge-success">有効</span><button class="button button-secondary button-small" type="button">編集</button></div>
+              </div>
+              <div class="empty-state"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><p>アプリケーションごとに、メインキーと中ボタン併用を登録できます。</p><button class="text-link" type="button" id="add-profile-empty">新しいプロファイルを作成</button></div>
+            </div>
+          </section>
+
+          <section class="view" data-view="safety" aria-labelledby="safety-title">
+            <div class="page-intro"><p class="eyebrow">安全とライフサイクル</p><h1 id="safety-title">ゲーム保護</h1><p class="intro-copy">検知リスクのあるゲームが起動している間は、入力エンジンを停止して本体を終了します。ゲーム終了後に自動で再起動します。</p></div>
+            <div class="card">
+              <div class="card-header"><div><h2>自動停止と再起動</h2><p class="fine">フックを解除してから本体を終了します。</p></div><button class="switch" type="button" role="switch" aria-checked="true" aria-label="ゲーム保護を有効にする" data-switch-label="ゲーム保護"></button></div>
+              <div class="settings-list" style="margin-top:16px">
+                <div class="settings-row"><div class="settings-row-main"><strong>危険なプロセスを検知したら終了</strong><p>入力フックと保持中のキーを安全に解放します。</p></div><button class="switch" type="button" role="switch" aria-checked="true" aria-label="危険プロセス検知時の自動終了" data-switch-label="自動終了"></button></div>
+                <div class="settings-row"><div class="settings-row-main"><strong>ゲーム終了後に自動再起動</strong><p>監視専用プロセスが終了を待ち、本体を再起動します。</p></div><button class="switch" type="button" role="switch" aria-checked="true" aria-label="ゲーム終了後の自動再起動" data-switch-label="自動再起動"></button></div>
+                <div class="settings-row"><div class="settings-row-main"><strong>再起動までの待機時間</strong><p>ゲーム終了後、プロセスが消えたことを確認してから再開します。</p></div><select aria-label="再起動までの待機時間" style="width:160px;min-height:40px;padding:8px 10px;border:1px solid var(--separator);border-radius:10px;background:var(--surface);color:var(--label)"><option>1秒</option><option>2秒</option><option>5秒</option></select></div>
+              </div>
+            </div>
+            <div class="section-heading"><h2>監視対象プロセス</h2><button class="button button-secondary button-small" type="button">対象を追加</button></div>
+            <section class="card process-table" aria-labelledby="process-title">
+              <h2 id="process-title" class="sr-only">監視対象プロセス一覧</h2>
+              <div class="process-header"><span>プロセス</span><span>用途</span><span>状態</span></div>
+              <div class="process-row"><span class="process-name">PioneerGame.exe</span><span class="process-note">Arc Raiders</span><span class="badge badge-success">監視中</span></div>
+              <div class="process-row"><span class="process-name">r5apex_dx12.exe</span><span class="process-note">Apex Legends</span><span class="badge badge-success">監視中</span></div>
+              <div class="process-row"><span class="process-name">bf6.exe</span><span class="process-note">Battlefield</span><span class="badge badge-success">監視中</span></div>
+              <div class="process-row"><span class="process-name">EAAntiCheat.GameService.exe</span><span class="process-note">補助プロセス</span><span class="badge">未起動</span></div>
+            </section>
+          </section>
+
+          <section class="view" data-view="settings" aria-labelledby="settings-title">
+            <div class="page-intro"><p class="eyebrow">システム</p><h1 id="settings-title">設定</h1><p class="intro-copy">LeafHotKeyの起動、入力、WebUIに関する動作を設定します。</p></div>
+            <div class="settings-tabs" role="tablist" aria-label="設定カテゴリ"><button class="settings-tab is-selected" type="button" role="tab" aria-selected="true">一般</button><button class="settings-tab" type="button" role="tab" aria-selected="false">入力</button><button class="settings-tab" type="button" role="tab" aria-selected="false">WebUI</button></div>
+            <section class="settings-section" aria-labelledby="general-settings-heading"><h2 id="general-settings-heading">一般</h2><p>Windowsでの常駐と設定の保存場所を管理します。</p><div class="card settings-list"><div class="settings-row"><div class="settings-row-main"><strong>Windows起動時に開始</strong><p>ユーザーのサインイン後にトレイへ常駐します。</p></div><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Windows起動時に開始" data-switch-label="自動起動"></button></div><div class="settings-row"><div class="settings-row-main"><strong>設定変更を即時反映</strong><p>保存時に入力エンジンを安全に再読み込みします。</p></div><button class="switch" type="button" role="switch" aria-checked="true" aria-label="設定変更を即時反映" data-switch-label="即時反映"></button></div><div class="settings-row"><div class="settings-row-main"><strong>テーマ</strong><p>LeafCodePiと同じライト／ダーク切替を使用します。</p></div><button class="button button-secondary button-small" type="button" data-theme-toggle>テーマを切り替え</button></div></div></section>
+            <section class="settings-section" aria-labelledby="web-settings-heading"><h2 id="web-settings-heading">WebUI接続</h2><p>ローカルマシンからのみ接続できる設定を想定しています。</p><div class="card card-body"><div class="form-grid"><div class="field"><label for="host">バインド先</label><select id="host"><option>127.0.0.1（このPCのみ）</option></select></div><div class="field"><label for="port">ポート</label><input id="port" value="17842" inputmode="numeric" /></div></div><div class="form-actions"><button class="button button-secondary" type="button">キャンセル</button><button class="button button-primary" type="button">設定を保存</button></div></div></section>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="profile-dialog" aria-labelledby="profile-dialog-title">
+      <form method="dialog" class="dialog-body">
+        <h2 id="profile-dialog-title">プロファイルを追加</h2>
+        <p>まず対象アプリを登録し、次の画面でキー変換を設定します。</p>
+        <div class="field"><label for="profile-name">表示名</label><input id="profile-name" placeholder="例：Maya" /></div>
+        <div class="field" style="margin-top:16px"><label for="profile-exe">実行ファイル名</label><input id="profile-exe" placeholder="例：Maya.exe" /></div>
+        <div class="form-actions"><button class="button button-secondary" value="cancel">キャンセル</button><button class="button button-primary" value="default">次へ</button></div>
+      </form>
+    </dialog>
+
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const views = [...document.querySelectorAll("[data-view]")];
+        const navItems = [...document.querySelectorAll("[data-view-target]")];
+        const breadcrumb = document.querySelector("#breadcrumb-current");
+        const titles = { overview: "常駐ステータス", profiles: "プロファイル", safety: "ゲーム保護", settings: "設定" };
+
+        function showView(viewName) {
+          views.forEach((view) => view.classList.toggle("is-active", view.dataset.view === viewName));
+          navItems.forEach((item) => {
+            const active = item.dataset.viewTarget === viewName;
+            if (item.classList.contains("nav-item")) {
+              if (active) item.setAttribute("aria-current", "page");
+              else item.removeAttribute("aria-current");
+            }
+          });
+          if (breadcrumb) breadcrumb.textContent = titles[viewName] || "LeafHotKey";
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        navItems.forEach((item) => item.addEventListener("click", () => showView(item.dataset.viewTarget)));
+
+        function updateThemeIcon() {
+          const dark = root.dataset.theme === "dark";
+          document.querySelectorAll("[data-theme-icon]").forEach((icon) => {
+            icon.innerHTML = dark
+              ? '<path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/>'
+              : '<path d="M20.5 15.3A8.5 8.5 0 0 1 8.7 3.5 8.5 8.5 0 1 0 20.5 15.3Z"/>';
+          });
+          document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+            button.setAttribute("aria-label", dark ? "ライトモードに切り替え" : "ダークモードに切り替え");
+          });
+        }
+
+        document.querySelectorAll("[data-theme-toggle]").forEach((button) => button.addEventListener("click", () => {
+          root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+          try { localStorage.setItem("leafhotkey.mockup.theme", root.dataset.theme); } catch (_) { /* local file may block storage */ }
+          updateThemeIcon();
+        }));
+        try {
+          const savedTheme = localStorage.getItem("leafhotkey.mockup.theme");
+          if (savedTheme === "dark" || savedTheme === "light") root.dataset.theme = savedTheme;
+        } catch (_) { /* local file may block storage */ }
+        updateThemeIcon();
+
+        document.querySelectorAll(".switch").forEach((switchButton) => {
+          const toggle = () => switchButton.setAttribute("aria-checked", switchButton.getAttribute("aria-checked") !== "true" ? "true" : "false");
+          switchButton.addEventListener("click", toggle);
+          switchButton.addEventListener("keydown", (event) => {
+            if (event.key === " " || event.key === "Enter") { event.preventDefault(); toggle(); }
+          });
+        });
+
+        const pauseButton = document.querySelector("#pause-button");
+        const runtimeTitle = document.querySelector("#runtime-status-title");
+        const runtimeCopy = document.querySelector("#runtime-copy");
+        const runtimeDot = document.querySelector("#runtime-dot");
+        if (pauseButton && runtimeTitle && runtimeCopy && runtimeDot) {
+          pauseButton.addEventListener("click", () => {
+            const paused = pauseButton.dataset.paused === "true";
+            pauseButton.dataset.paused = String(!paused);
+            runtimeTitle.textContent = paused ? "入力変換は有効です" : "入力変換を一時停止中";
+            runtimeCopy.textContent = paused ? "前面アプリに合わせて、登録済みのプロファイルを適用しています。" : "手動停止中です。再開するまでキー変換は行いません。";
+            runtimeDot.classList.toggle("offline-dot", !paused);
+            pauseButton.querySelector("span").textContent = paused ? "一時停止" : "再開";
+            pauseButton.querySelector("svg").innerHTML = paused ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>' : '<path d="m8 5 11 7-11 7V5Z" fill="currentColor" stroke="none"/>';
+          });
+        }
+
+        const dialog = document.querySelector("#profile-dialog");
+        [document.querySelector("#add-profile"), document.querySelector("#add-profile-empty")].forEach((button) => button?.addEventListener("click", () => dialog?.showModal()));
+      })();
+    </script>
+  </body>
+</html>
