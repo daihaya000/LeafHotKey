@@ -130,14 +130,14 @@ public static class ServerSelfCheck
                     "WebUI の index.html を配信し、サブリソースへトークンを埋め込む");
                 Check(
                     "webui.css",
-                    Send(uiServer.Port, "GET", "/styles.css?token=" + assetToken, uiHost, uiOrigin, token: null).Status == 200,
-                    "ブラウザ形式のトークン付き styles.css を配信できる");
+                    Send(uiServer.Port, "GET", "/styles.css", uiHost, uiOrigin, token: null).Status == 200,
+                    "styles.css はトークンなしでも配信する");
 
-                var script = Send(uiServer.Port, "GET", "/app.js?token=" + assetToken, uiHost, uiOrigin, token: null);
+                var script = Send(uiServer.Port, "GET", "/app.js", uiHost, uiOrigin, token: null);
                 Check(
                     "webui.js",
                     script.Status == 200 && script.Body.Contains("X-LeafHotKey-Token", StringComparison.Ordinal),
-                    "ブラウザ形式のトークン付き app.js を配信できる");
+                    "app.js はトークンなしでも配信する");
 
                 var snapshot2 = store2.Load();
                 var body2 = JsonSerializer.Serialize(new

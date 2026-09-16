@@ -153,7 +153,8 @@ public sealed class SettingsServer : IDisposable
             return;
         }
 
-        if (!IsAuthorized(request))
+        // CSS/JS はブラウザがカスタムヘッダを付けられない。中身に秘密はないので認証しない。
+        if (RequiresAuth(request) && !IsAuthorized(request))
         {
             await WriteAsync(stream, 401, "text/plain; charset=utf-8", "unauthorized").ConfigureAwait(false);
             return;
@@ -300,6 +301,14 @@ public sealed class SettingsServer : IDisposable
         }
 
         await WriteAsync(stream, 200, contentType, content).ConfigureAwait(false);
+    }
+
+    private static bool RequiresAuth(HttpRequest request)
+    {
+        if (request.Method != "GET") return true;
+        var name = request.Path == "/" ? "index.html" : request.Path.TrimStart('/');
+        return !name.Equals("styles.css", StringComparison.OrdinalIgnoreCase)
+            && !name.Equals("app.js", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool IsAuthorized(HttpRequest request)
