@@ -156,7 +156,10 @@ public sealed class SettingsServer : IDisposable
         // CSS/JS はブラウザがカスタムヘッダを付けられない。中身に秘密はないので認証しない。
         if (RequiresAuth(request) && !IsAuthorized(request))
         {
-            await WriteAsync(stream, 401, "text/plain; charset=utf-8", "unauthorized").ConfigureAwait(false);
+            var message = request.Method == "GET" && (request.Path == "/" || request.Path == "/index.html")
+                ? "認証情報がないか、期限が切れています。\nタスクトレイの LeafHotKey を右クリックし「設定を開く」から開き直してください。\n再起動前のタブやURLは使えません。"
+                : "unauthorized";
+            await WriteAsync(stream, 401, "text/plain; charset=utf-8", message).ConfigureAwait(false);
             return;
         }
 

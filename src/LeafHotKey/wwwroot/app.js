@@ -3,10 +3,8 @@
 (() => {
   const pageUrl = new URL(window.location.href);
   const token = pageUrl.searchParams.get("token") || "";
-  if (pageUrl.searchParams.has("token")) {
-    pageUrl.searchParams.delete("token");
-    window.history.replaceState(null, "", pageUrl.pathname + pageUrl.search);
-  }
+  // HTML 自体も認証必須。URLから消すとF5で401になるため保持する。
+  // トークンは起動ごとに失効する。URLを共有せず、no-referrerを維持する。
 
   const el = (id) => document.getElementById(id);
   const root = document.documentElement;

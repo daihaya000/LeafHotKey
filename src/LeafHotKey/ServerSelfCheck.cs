@@ -139,6 +139,18 @@ public static class ServerSelfCheck
                     script.Status == 200 && script.Body.Contains("X-LeafHotKey-Token", StringComparison.Ordinal),
                     "app.js はトークンなしでも配信する");
 
+                var pageTarget = "/?token=" + assetToken;
+                Check("webui.reload",
+                    Send(uiServer.Port, "GET", pageTarget, uiHost, origin: null, token: null).Status == 200 &&
+                    Send(uiServer.Port, "GET", pageTarget, uiHost, origin: null, token: null).Status == 200,
+                    "同じ認証URLで初回表示と再読み込みができる");
+                var expired = Send(uiServer.Port, "GET", "/?token=" + server.Token, uiHost, origin: null, token: null);
+                Check("webui.expired", expired.Status == 401 && expired.Body.Contains("設定を開く", StringComparison.Ordinal),
+                    "別インスタンスのトークンは拒否し、開き直しを案内する");
+                var noToken = Send(uiServer.Port, "GET", "/", uiHost, origin: null, token: null);
+                Check("webui.no-token", noToken.Status == 401 && noToken.Body.Contains("設定を開く", StringComparison.Ordinal),
+                    "認証のないページには開き直しを案内する");
+
                 var snapshot2 = store2.Load();
                 var body2 = JsonSerializer.Serialize(new
                 {
