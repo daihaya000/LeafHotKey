@@ -19,6 +19,10 @@ public static class Program
         {
             case "--check":
                 return SelfCheck.Run(args.Length > 1 ? args[1] : null);
+            case "--check-settings":
+                return SettingsSelfCheck.Run(
+                    args.Length > 1 ? args[1] : null,
+                    args.Length > 2 ? args[2] : null);
             case "--check-coverage":
                 return CoverageSelfCheck.Run(
                     args.Length > 1 ? args[1] : null,

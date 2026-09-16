@@ -1,0 +1,127 @@
+using System.Text;
+
+namespace LeafHotKey;
+
+/// <summary>
+/// 設定の保存・検証・競合検出を確認する。
+/// 実際の保存先には触れず、一時ディレクトリで検証する。
+/// </summary>
+public static class SettingsSelfCheck
+{
+    public static int Run(string? reportPath, string? defaultsPath)
+    {
+        var path = reportPath ?? Path.Combine(Path.GetTempPath(), "leafhotkey-settingscheck.txt");
+        var encoding = new UTF8Encoding(false);
+        var failures = 0;
+
+        File.WriteAllText(path, string.Empty, encoding);
+
+        void Check(string name, bool ok, string detail)
+        {
+            if (!ok) failures++;
+            File.AppendAllText(path, $"{(ok ? "PASS" : "FAIL")} {name}: {detail}{Environment.NewLine}", encoding);
+        }
+
+        var defaults = defaultsPath ?? FindDefaultSettings();
+        if (defaults is null)
+        {
+            Check("defaults.found", false, "defaults/settings.json が見つからない");
+            File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);
+            return 1;
+        }
+
+        var workDirectory = Path.Combine(Path.GetTempPath(), "leafhotkey-settingscheck-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workDirectory);
+
+        try
+        {
+            var settingsPath = Path.Combine(workDirectory, "settings.json");
+            var store = new SettingsStore(settingsPath, defaults);
+
+            Check("seed.missing", !File.Exists(settingsPath), "初期状態では保存先が存在しない");
+
+            var first = store.Load();
+            Check("seed.created", File.Exists(settingsPath), "初回読み込みで既定設定から作られる");
+            Check("seed.contents", first.Profiles.Count == 13 && first.GameProtection.StopTriggerProcessNames.Count == 6, $"プロファイル {first.Profiles.Count} 件・停止対象 {first.GameProtection.StopTriggerProcessNames.Count} 件を読み込む");
+
+            var again = store.Load();
+            Check("revision.stable", first.Revision == again.Revision, "内容が変わらなければ版も変わらない");
+
+            // 正常な更新。
+            var updated = first.Json.Replace("\"pollIntervalMs\": 1000", "\"pollIntervalMs\": 750", StringComparison.Ordinal);
+            Check("update.prepared", updated != first.Json, "更新用の内容を用意できる");
+
+            var saved = store.Save(updated, first.Revision);
+            Check("save.ok", saved.Success, $"正しい内容を保存できる（{saved.Message}）");
+
+            var afterSave = store.Load();
+            Check("save.applied", afterSave.GameProtection.PollIntervalMs == 750, $"保存内容が反映される（pollIntervalMs={afterSave.GameProtection.PollIntervalMs}）");
+            Check("save.revision", afterSave.Revision != first.Revision && afterSave.Revision == saved.Revision, "保存で版が更新される");
+            Check("save.backup", File.Exists(store.BackupPath), "直前の内容がバックアップに残る");
+            Check("save.no-temp", !File.Exists(settingsPath + ".tmp"), "一時ファイルが残らない");
+
+            var bom = File.ReadAllBytes(settingsPath);
+            Check("save.encoding", !(bom.Length >= 3 && bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF), "UTF-8 BOM なしで保存する");
+
+            // 版が古い保存は拒否する。
+            var stale = store.Save(first.Json, first.Revision);
+            Check("conflict.rejected", stale.Status == SaveStatus.Conflict, $"古い版での保存を拒否する（{stale.Message}）");
+            Check("conflict.unchanged", store.Load().Revision == afterSave.Revision, "拒否した場合は内容を変えない");
+
+            // 壊れた JSON は拒否する。
+            var broken = store.Save("{ \"profiles\": [", afterSave.Revision);
+            Check("invalid.json", broken.Status == SaveStatus.Invalid, "壊れた JSON を拒否する");
+            Check("invalid.json.unchanged", store.Load().Revision == afterSave.Revision, "拒否後も内容が残る");
+
+            // 設定として成立しない内容も拒否する。
+            var emptyTriggers = afterSave.Json.Replace(
+                "\"stopTriggerProcessNames\": [\n      \"PioneerGame.exe\"",
+                "\"stopTriggerProcessNames\": [\n      \"\"",
+                StringComparison.Ordinal);
+            var invalidRule = store.Save(emptyTriggers, store.Load().Revision);
+            Check("invalid.rule", invalidRule.Status == SaveStatus.Invalid, $"空のプロセス名を拒否する（{invalidRule.Message}）");
+
+            var unknownAction = afterSave.Json.Replace("\"type\": \"send\"", "\"type\": \"explode\"", StringComparison.Ordinal);
+            var invalidAction = store.Save(unknownAction, store.Load().Revision);
+            Check("invalid.action", invalidAction.Status == SaveStatus.Invalid, "未知の action.type を拒否する");
+
+            var unknownKey = afterSave.Json.Replace("\"sequence\": [\"{Right}\"]", "\"sequence\": [\"{NoSuchKey}\"]", StringComparison.Ordinal);
+            var invalidKey = store.Save(unknownKey, store.Load().Revision);
+            Check("invalid.key", invalidKey.Status == SaveStatus.Invalid, "未知のキー名を拒否する");
+
+            Check("invalid.unchanged", store.Load().GameProtection.PollIntervalMs == 750, "拒否された保存は反映されない");
+
+            // 既定へ戻す。
+            var restored = store.RestoreDefaults();
+            Check("restore.ok", restored.Success, "既定設定へ戻せる");
+            Check(
+                "restore.contents",
+                store.Load().Revision == SettingsStore.RevisionOf(File.ReadAllText(defaults, encoding)),
+                "戻した内容が既定設定と一致する");
+
+            // 版を指定しない保存は上書きを許す（初期化などの用途）。
+            var forced = store.Save(updated, expectedRevision: null);
+            Check("save.force", forced.Success, "版を指定しない保存は通る");
+        }
+        finally
+        {
+            Directory.Delete(workDirectory, recursive: true);
+        }
+
+        File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);
+        return failures == 0 ? 0 : 1;
+    }
+
+    private static string? FindDefaultSettings()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "defaults", "settings.json");
+            if (File.Exists(candidate)) return candidate;
+            directory = directory.Parent;
+        }
+
+        return null;
+    }
+}
