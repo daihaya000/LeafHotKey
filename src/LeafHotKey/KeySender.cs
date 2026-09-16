@@ -16,7 +16,7 @@ public sealed class SendResult
 /// 1 つの送信単位は 1 回の SendInput で送り、途中に他の入力が割り込まないようにする。
 /// 自分が送ったイベントは ExtraInfo の署名で識別でき、フック側で自己入力を無視できる。
 /// </summary>
-public sealed class KeySender
+public sealed class KeySender : IKeySink
 {
     /// <summary>LeafHotKey が注入したイベントであることを示す署名。</summary>
     public const ulong DefaultSignature = 0x4C48_4B45_5901;
@@ -30,7 +30,9 @@ public sealed class KeySender
 
     public UIntPtr Signature => _signature;
 
-    public SendResult Send(IReadOnlyList<SendToken> tokens, IntPtr? layout = null)
+    public SendResult Send(IReadOnlyList<SendToken> tokens) => Send(tokens, null);
+
+    public SendResult Send(IReadOnlyList<SendToken> tokens, IntPtr? layout)
     {
         var activeLayout = layout ?? KeyResolver.CurrentLayout;
         var inputs = new List<NativeMethods.Input>(tokens.Count * 6);
