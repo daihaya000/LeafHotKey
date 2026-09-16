@@ -59,6 +59,15 @@ public static class Program
 
         if (ControlClient.IsHostResponding(500)) return ExitOk;
 
+        return LaunchHost(hostPath);
+    }
+
+    /// <summary>
+    /// 本体の実行ファイルを起動する。
+    /// 多重起動防止と生存確認は呼び出し側の責任とし、ここではパスの妥当性だけを扱う。
+    /// </summary>
+    internal static int LaunchHost(string? hostPath)
+    {
         var path = hostPath ?? Path.Combine(AppContext.BaseDirectory, "LeafHotKey.exe");
         if (!File.Exists(path))
         {
@@ -190,9 +199,13 @@ public static class Program
         return failures == 0 ? ExitOk : ExitFailed;
     }
 
+    /// <summary>
+    /// 実行ファイルが無い場合の扱いを確かめる。
+    /// 本体や Watcher が実際に動作していても結果が変わらないよう、起動部分だけを呼ぶ。
+    /// </summary>
     private static bool StartHostPathMissing()
     {
         var missing = Path.Combine(Path.GetTempPath(), "leafhotkey-absent-" + Guid.NewGuid().ToString("N") + ".exe");
-        return StartHost(missing) == ExitFailed;
+        return LaunchHost(missing) == ExitFailed;
     }
 }
