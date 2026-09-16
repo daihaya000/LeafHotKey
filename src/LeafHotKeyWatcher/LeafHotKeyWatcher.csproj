@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>LeafHotKeyWatcher</AssemblyName>
+    <RootNamespace>LeafHotKeyWatcher</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Watcher は入力フックと WebUI を持たない。制御通信の定義だけを本体と共有する。 -->
+    <Compile Include="..\LeafHotKey\ControlProtocol.cs" Link="Shared\ControlProtocol.cs" />
+    <Compile Include="..\LeafHotKey\ControlClient.cs" Link="Shared\ControlClient.cs" />
+    <Compile Include="..\LeafHotKey\SingleInstance.cs" Link="Shared\SingleInstance.cs" />
+  </ItemGroup>
+
+</Project>
