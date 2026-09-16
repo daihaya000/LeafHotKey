@@ -9,87 +9,166 @@
     <link rel="stylesheet" href="styles.css?token=__LEAFHOTKEY_TOKEN__" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="brand">LeafHotKey</div>
-      <div class="status-line">
-        <span class="dot" id="state-dot" aria-hidden="true"></span>
-        <span id="state-text">状態を取得しています…</span>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="LeafHotKeyナビゲーション">
+        <div class="brand-bar">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 15.5c2.1-6.2 7.1-8.8 12-9-0.2 4.9-2.8 9.9-9 12" />
+              <path d="M5 19c2.7-3.9 5.6-6.4 9.2-8.3" />
+            </svg>
+          </div>
+          <div class="brand-copy">
+            <div class="brand-name">LeafHotKey</div>
+            <div class="brand-meta">Windows utility</div>
+          </div>
+        </div>
+
+        <div class="sidebar-scroll">
+          <div class="nav-label">管理</div>
+          <nav class="nav-list" aria-label="メインナビゲーション">
+            <button class="nav-item" type="button" data-view-target="overview" aria-current="page">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              <span>概要</span>
+            </button>
+            <button class="nav-item" type="button" data-view-target="profiles">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16M4 12h16M4 17.5h16"/><circle cx="8" cy="6.5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="10" cy="17.5" r="1.5"/></svg>
+              <span>プロファイル</span>
+              <span class="nav-count" id="nav-profile-count">-</span>
+            </button>
+            <button class="nav-item" type="button" data-view-target="safety">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 20 6v5c0 5.2-3.4 8.5-8 10-4.6-1.5-8-4.8-8-10V6l8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+              <span>ゲーム保護</span>
+            </button>
+          </nav>
+
+          <div class="nav-label">システム</div>
+          <nav class="nav-list" aria-label="システムナビゲーション">
+            <button class="nav-item" type="button" data-view-target="settings">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+              <span>設定 JSON</span>
+            </button>
+          </nav>
+
+          <div class="sidebar-note">
+            <div class="sidebar-note-title"><span class="online-dot" aria-hidden="true"></span><span id="sidebar-protection-title">ゲーム保護</span></div>
+            <p id="sidebar-protection-copy">設定を読み込んでいます。</p>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <span class="online-dot" aria-hidden="true"></span>
+          <span>トレイ常駐中</span>
+          <button class="icon-button" type="button" data-theme-toggle aria-label="ダークモードに切り替え" title="テーマ切替">
+            <svg aria-hidden="true" data-theme-icon="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 15.3A8.5 8.5 0 0 1 8.7 3.5 8.5 8.5 0 1 0 20.5 15.3Z"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <div class="main-column">
+        <div class="mobile-menu">
+          <div class="mobile-brand"><div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15.5c2.1-6.2 7.1-8.8 12-9-0.2 4.9-2.8 9.9-9 12"/><path d="M5 19c2.7-3.9 5.6-6.4 9.2-8.3"/></svg></div>LeafHotKey</div>
+          <button class="icon-button" type="button" data-theme-toggle aria-label="ダークモードに切り替え" title="テーマ切替"><svg aria-hidden="true" data-theme-icon="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 15.3A8.5 8.5 0 0 1 8.7 3.5 8.5 8.5 0 1 0 20.5 15.3Z"/></svg></button>
+        </div>
+
+        <header class="topbar">
+          <div class="breadcrumbs" aria-label="現在位置"><strong>概要</strong><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><span id="breadcrumb-current">常駐ステータス</span></div>
+          <div class="topbar-actions">
+            <div class="connection-badge"><span class="online-dot" aria-hidden="true"></span><span id="connection-text">Windowsホスト接続済み</span></div>
+          </div>
+        </header>
+
+        <main class="content">
+          <p id="alert" class="alert" role="alert" hidden></p>
+
+          <section class="view is-active" data-view="overview" aria-labelledby="overview-title">
+            <div class="page-intro">
+              <p class="eyebrow">常駐ステータス</p>
+              <h1 id="overview-title">LeafHotKey</h1>
+              <p class="intro-copy">アプリごとのキー変換と、ゲーム起動時の安全な停止をひとつの場所で管理します。</p>
+            </div>
+
+            <section class="card status-card" aria-labelledby="runtime-status-title">
+              <div class="status-card-main">
+                <div>
+                  <div class="status-title"><span class="status-dot" id="runtime-dot" aria-hidden="true"></span><h2 id="runtime-status-title">状態を取得しています…</h2></div>
+                  <p class="status-card-copy" id="runtime-copy">本体の状態を確認しています。</p>
+                  <div class="status-context">
+                    <span class="context-chip"><span>前面</span><strong id="status-foreground">-</strong></span>
+                    <span class="context-chip"><span>プロファイル</span><strong id="status-profile">-</strong></span>
+                  </div>
+                </div>
+                <div class="status-actions">
+                  <button class="button button-secondary" type="button" id="pause-button" disabled title="一時停止はトレイメニューから操作します"><span>一時停止（トレイから）</span></button>
+                  <button class="button button-primary" type="button" data-view-target="profiles"><span>設定を確認</span></button>
+                </div>
+              </div>
+              <div class="status-card-footer"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 20 6v5c0 5.2-3.4 8.5-8 10-4.6-1.5-8-4.8-8-10V6l8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span id="protection-summary">ゲーム保護の設定を読み込んでいます。</span></div>
+            </section>
+
+            <div class="summary-grid" aria-label="概要メトリクス">
+              <article class="card summary-card"><div class="summary-label">有効なプロファイル</div><div class="summary-value" id="summary-profiles">-</div><div class="summary-detail" id="summary-profiles-detail">設定を読み込んでいます。</div></article>
+              <article class="card summary-card"><div class="summary-label">登録ショートカット</div><div class="summary-value" id="summary-rules">-</div><div class="summary-detail" id="summary-rules-detail">設定を読み込んでいます。</div></article>
+              <article class="card summary-card"><div class="summary-label">監視プロセス</div><div class="summary-value" id="summary-processes">-</div><div class="summary-detail" id="summary-processes-detail">設定を読み込んでいます。</div></article>
+            </div>
+
+            <div class="section-heading"><h2>登録済みプロファイル</h2><button class="text-link" type="button" data-view-target="profiles">すべて表示</button></div>
+            <div class="dashboard-grid">
+              <section class="card list-card" aria-labelledby="profile-list-title">
+                <div class="card-header"><div><h3 id="profile-list-title">プロファイル一覧</h3><p class="fine">前面ウィンドウに応じて自動適用</p></div><span class="badge badge-accent">自動適用</span></div>
+                <div id="overview-profiles" class="list-rows"></div>
+              </section>
+
+              <section class="card list-card" aria-labelledby="activity-title">
+                <div class="card-header"><div><h3 id="activity-title">現在の設定</h3><p class="fine">保存済みの状態</p></div><span class="badge" id="overview-revision">-</span></div>
+                <div class="activity-list" id="overview-activity"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="view" data-view="profiles" aria-labelledby="profiles-title">
+            <div class="page-intro"><p class="eyebrow">設定</p><h1 id="profiles-title">プロファイル</h1><p class="intro-copy">前面アプリごとのキー変換を管理します。変更は保存後に入力エンジンへ反映されます。</p></div>
+            <div class="card">
+              <div class="card-header"><div><h2>アプリ別の設定</h2><p class="fine" id="profile-count-label">設定を読み込んでいます。</p></div><button class="button button-secondary button-small" type="button" data-view-target="settings">JSONで編集</button></div>
+              <div id="profile-list" class="settings-list" style="margin-top:16px"></div>
+              <div class="empty-state" id="profile-empty" hidden><p>プロファイルがありません。</p><button class="text-link" type="button" data-view-target="settings">設定 JSON を編集</button></div>
+            </div>
+          </section>
+
+          <section class="view" data-view="safety" aria-labelledby="safety-title">
+            <div class="page-intro"><p class="eyebrow">安全とライフサイクル</p><h1 id="safety-title">ゲーム保護</h1><p class="intro-copy">検知リスクのあるゲームが起動している間は、入力エンジンを停止して本体を終了します。ゲーム終了後に自動で再起動します。</p></div>
+            <div class="card">
+              <div class="card-header"><div><h2>自動停止と再起動</h2><p class="fine">フックを解除してから本体を終了します。</p></div><button class="switch" type="button" id="protection-enabled" role="switch" aria-checked="false" aria-label="ゲーム保護を有効にする"></button></div>
+              <div class="settings-list" style="margin-top:16px">
+                <div class="settings-row"><div class="settings-row-main"><strong>監視間隔</strong><p>プロセス検知を行う間隔です。</p></div><div class="field-inline"><input type="number" id="poll-interval" min="1" step="100" aria-label="監視間隔（ミリ秒）" /><span>ミリ秒</span></div></div>
+                <div class="settings-row"><div class="settings-row-main"><strong>ゲーム終了後の待機</strong><p>復帰対象プロセスが消えた後に再起動するまでの時間です。</p></div><div class="field-inline"><input type="number" id="resume-delay" min="0" step="100" aria-label="復帰までの待機（ミリ秒）" /><span>ミリ秒</span></div></div>
+                <div class="settings-row settings-row-stacked"><div class="settings-row-main"><strong>退避トリガのプロセス</strong><p>1行に1件。検知したら本体を終了します。</p></div><textarea id="stop-triggers" rows="5" spellcheck="false" aria-label="退避トリガのプロセス"></textarea></div>
+                <div class="settings-row settings-row-stacked"><div class="settings-row-main"><strong>復帰を待つプロセス</strong><p>1行に1件。すべて終了してから本体を再起動します。</p></div><textarea id="resume-processes" rows="5" spellcheck="false" aria-label="復帰を待つプロセス"></textarea></div>
+              </div>
+            </div>
+            <div class="section-heading"><h2>監視対象プロセス</h2><span class="fine" id="process-count-label">-</span></div>
+            <section class="card process-table" aria-labelledby="process-title">
+              <h2 id="process-title" class="sr-only">監視対象プロセス一覧</h2>
+              <div class="process-header"><span>プロセス</span><span>用途</span><span>状態</span></div>
+              <div id="process-list"></div>
+            </section>
+          </section>
+
+          <section class="view" data-view="settings" aria-labelledby="settings-title">
+            <div class="page-intro"><p class="eyebrow">システム</p><h1 id="settings-title">設定 JSON</h1><p class="intro-copy">設定全体を確認・編集します。保存すると入力エンジンへ安全に反映されます。</p></div>
+            <div class="settings-tabs" role="tablist" aria-label="設定カテゴリ"><button class="settings-tab is-selected" type="button" role="tab" aria-selected="true">設定 JSON</button><span class="fine" style="align-self:center;margin:0 12px">版: <strong id="settings-revision">-</strong></span></div>
+            <section class="settings-section" aria-labelledby="json-heading"><h2 id="json-heading">設定 JSON</h2><p>直接編集した内容が保存されます。JSONとして正しく、設定の制約を満たす必要があります。</p><div class="card card-body"><textarea id="json" rows="20" spellcheck="false" class="mono" aria-label="設定 JSON"></textarea></div></section>
+          </section>
+
+          <div class="actions">
+            <span id="save-state" class="save-state">読み込み中…</span>
+            <button class="button button-secondary button-small" type="button" id="reload">再読み込み</button>
+            <button class="button button-destructive button-small" type="button" id="restore">既定に戻す</button>
+            <button class="button button-primary button-small" type="button" id="save">保存して反映</button>
+          </div>
+        </main>
       </div>
-    </header>
-
-    <main class="content">
-      <p id="alert" class="alert" role="alert" hidden></p>
-
-      <section class="card" aria-labelledby="overview-title">
-        <h1 id="overview-title">概要</h1>
-        <dl class="facts">
-          <dt>入力変換</dt>
-          <dd id="fact-state">-</dd>
-          <dt>前面アプリ</dt>
-          <dd id="fact-foreground">-</dd>
-          <dt>プロファイル</dt>
-          <dd id="fact-profiles">-</dd>
-          <dt>ルール</dt>
-          <dd id="fact-rules">-</dd>
-          <dt>設定の版</dt>
-          <dd id="fact-revision" class="mono">-</dd>
-        </dl>
-      </section>
-
-      <section class="card" aria-labelledby="protection-title">
-        <h2 id="protection-title">ゲーム保護</h2>
-        <p class="note">検知リスクのあるゲームが起動している間は入力エンジンを停止し、本体を終了します。ゲーム終了後に自動で再起動します。</p>
-
-        <div class="row">
-          <label class="row-main" for="protection-enabled">
-            <span class="row-title">ゲーム保護を有効にする</span>
-            <span class="row-note">無効にすると検知しても退避しません。</span>
-          </label>
-          <input type="checkbox" id="protection-enabled" />
-        </div>
-
-        <div class="grid">
-          <label class="field">
-            <span>監視間隔（ミリ秒）</span>
-            <input type="number" id="poll-interval" min="1" step="100" />
-          </label>
-          <label class="field">
-            <span>復帰までの待機（ミリ秒）</span>
-            <input type="number" id="resume-delay" min="0" step="100" />
-          </label>
-        </div>
-
-        <div class="grid">
-          <label class="field">
-            <span>退避トリガのプロセス（1行に1件）</span>
-            <textarea id="stop-triggers" rows="6" spellcheck="false"></textarea>
-          </label>
-          <label class="field">
-            <span>復帰を待つプロセス（1行に1件）</span>
-            <textarea id="resume-processes" rows="6" spellcheck="false"></textarea>
-          </label>
-        </div>
-      </section>
-
-      <section class="card" aria-labelledby="profiles-title">
-        <h2 id="profiles-title">プロファイル</h2>
-        <p class="note">前面アプリごとのキー変換です。有効・無効を切り替えられます。割り当ての編集は下の JSON で行います。</p>
-        <div id="profiles"></div>
-      </section>
-
-      <section class="card" aria-labelledby="json-title">
-        <h2 id="json-title">設定 JSON</h2>
-        <p class="note">上のフォームの内容がここに反映されます。直接編集した場合は、その内容が保存されます。</p>
-        <textarea id="json" rows="16" spellcheck="false" class="mono"></textarea>
-      </section>
-    </main>
-
-    <footer class="actions">
-      <span id="save-state" class="save-state">読み込み中…</span>
-      <button type="button" id="reload">再読み込み</button>
-      <button type="button" id="restore" class="danger">既定に戻す</button>
-      <button type="button" id="save" class="primary">保存して反映</button>
-    </footer>
+    </div>
 
     <script src="app.js?token=__LEAFHOTKEY_TOKEN__"></script>
   </body>
