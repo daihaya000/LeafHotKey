@@ -9,6 +9,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly HostState _state;
     private readonly ControlServer _server;
     private readonly NotifyIcon _icon;
+    private readonly Icon _trayIcon;
     private readonly ToolStripMenuItem _toggleItem;
 
     private readonly string? _settingsUrl;
@@ -33,9 +34,10 @@ public sealed class TrayApplication : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
 
+        _trayIcon = LoadTrayIcon();
         _icon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = _trayIcon,
             Visible = true,
             ContextMenuStrip = menu,
         };
@@ -61,6 +63,19 @@ public sealed class TrayApplication : ApplicationContext
         catch (System.ComponentModel.Win32Exception)
         {
             // 既定のブラウザが無い環境では何もしない。
+        }
+    }
+
+    private static Icon LoadTrayIcon()
+    {
+        try
+        {
+            return Icon.ExtractAssociatedIcon(Application.ExecutablePath)
+                ?? new Icon(SystemIcons.Application, SystemInformation.SmallIconSize);
+        }
+        catch (Exception)
+        {
+            return new Icon(SystemIcons.Application, SystemInformation.SmallIconSize);
         }
     }
 
@@ -118,6 +133,7 @@ public sealed class TrayApplication : ApplicationContext
             _server.ShutdownRequested -= OnShutdownRequested;
             _icon.Visible = false;
             _icon.Dispose();
+            _trayIcon.Dispose();
         }
 
         base.Dispose(disposing);

@@ -12,6 +12,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ApplicationIcon>Assets\LeafHotKey.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
