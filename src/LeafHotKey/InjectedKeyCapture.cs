@@ -35,9 +35,12 @@ public sealed class InjectedKeyCapture : IDisposable
     private IntPtr _hook;
     private uint _threadId;
 
-    public InjectedKeyCapture(UIntPtr signature)
+    private readonly bool _captureAllInjected;
+
+    public InjectedKeyCapture(UIntPtr signature, bool captureAllInjected = false)
     {
         _signature = signature;
+        _captureAllInjected = captureAllInjected;
         _thread = new Thread(Pump)
         {
             IsBackground = true,
@@ -107,9 +110,12 @@ public sealed class InjectedKeyCapture : IDisposable
         var data = System.Runtime.InteropServices.Marshal
             .PtrToStructure<NativeMethods.KeyboardLowLevelHookStruct>(lParam);
 
-        if (data.ExtraInfo != _signature)
+        var injected = (data.Flags & 0x10) != 0;
+        var mine = data.ExtraInfo == _signature;
+
+        if (!mine && !(_captureAllInjected && injected))
         {
-            // 自分の署名でない入力には触れない。
+            // 対象外の入力（特に実のユーザー操作）には触れない。
             return NativeMethods.CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
         }
 

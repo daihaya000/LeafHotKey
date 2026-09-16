@@ -19,6 +19,8 @@ public static class Program
         {
             case "--check":
                 return SelfCheck.Run(args.Length > 1 ? args[1] : null);
+            case "--check-hook":
+                return HookSelfCheck.Run(args.Length > 1 ? args[1] : null);
             case "--check-engine":
                 return EngineSelfCheck.Run(
                     args.Length > 1 ? args[1] : null,
@@ -60,12 +62,41 @@ public static class Program
         using var server = new ControlServer(state);
         server.Start();
 
+        var settingsPath = FindDefaultSettings();
+        var profiles = settingsPath is null
+            ? Array.Empty<HotkeyProfile>()
+            : HotkeyProfileLoader.Load(settingsPath).ToArray();
+
+        using var engine = new InputEngine(profiles);
+        var engineStarted = engine.Start();
+
+        // フックを設置できなかった場合は動作中として扱わない。
+        if (!engineStarted) state.Pause();
+        state.StateChanged += next => engine.Enabled = next == RuntimeState.Running;
+
         ApplicationConfiguration.Initialize();
         using var tray = new TrayApplication(state, server);
         Application.Run(tray);
 
+        // ゲーム保護の退避を含め、終了前に必ずフック解除とキー解放を行う。
+        engine.Stop();
+
         // 終了理由が未設定のまま Application.Run を抜けた場合も手動終了として扱う。
         if (state.ExitReason == ExitReason.None) state.BeginShutdown(ExitReason.Manual);
         return ExitOk;
+    }
+
+    /// <summary>実行ディレクトリから上位へ defaults/settings.json を探す。</summary>
+    private static string? FindDefaultSettings()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "defaults", "settings.json");
+            if (File.Exists(candidate)) return candidate;
+            directory = directory.Parent;
+        }
+
+        return null;
     }
 }

@@ -30,6 +30,9 @@ public sealed class InputEngineCore
     /// <summary>保持中の修飾キー。解除キー名で引く。</summary>
     private readonly Dictionary<string, List<string>> _activeHolds = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>押下を抑止したキー。解放だけアプリへ漏れないように覚えておく。</summary>
+    private readonly HashSet<string> _suppressedDownKeys = new(StringComparer.OrdinalIgnoreCase);
+
     public InputEngineCore(IKeySink sink)
     {
         _sink = sink;
@@ -61,9 +64,17 @@ public sealed class InputEngineCore
 
         _activeHolds.Clear();
         _heldPrefixes.Clear();
+        _suppressedDownKeys.Clear();
     }
 
     public InputDecision OnKeyDown(string key, SendModifiers modifiers)
+    {
+        var decision = DecideKeyDown(key, modifiers);
+        if (decision == InputDecision.Suppress) _suppressedDownKeys.Add(key);
+        return decision;
+    }
+
+    private InputDecision DecideKeyDown(string key, SendModifiers modifiers)
     {
         var profile = ActiveProfile;
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
@@ -115,7 +126,8 @@ public sealed class InputEngineCore
         var profile = ActiveProfile;
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
 
-        var decision = InputDecision.PassThrough;
+        // 押下を抑止したキーは、解放も抑止して対を揃える。
+        var decision = _suppressedDownKeys.Remove(key) ? InputDecision.Suppress : InputDecision.PassThrough;
 
         // 保持中の修飾キーは、解除キーを離した時点で必ず解放する。
         if (_activeHolds.TryGetValue(key, out var holdModifiers))
