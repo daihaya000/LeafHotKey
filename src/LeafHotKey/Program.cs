@@ -67,50 +67,84 @@ public static class Program
 
     private static int RunTray()
     {
-        using var single = SingleInstance.TryAcquire("host");
-        if (!single.Acquired) return ExitAlreadyRunning;
+        var restartRequested = false;
 
-        var state = new HostState();
-        using var server = new ControlServer(state);
-        server.Start();
-
-        // 設定の正本はユーザーごとの保存先。無ければ既定設定から作る。
-        var defaultsPath = FindDefaultSettings();
-        var store = defaultsPath is null ? null : new SettingsStore(SettingsStore.DefaultSettingsPath, defaultsPath);
-        var profiles = store is null
-            ? Array.Empty<HotkeyProfile>()
-            : store.Load().Profiles.ToArray();
-
-        using var engine = new InputEngine(profiles);
-        var engineStarted = engine.Start();
-
-        // フックを設置できなかった場合は動作中として扱わない。
-        if (!engineStarted) state.Pause();
-        state.StateChanged += next => engine.Enabled = next == RuntimeState.Running;
-
-        SettingsServer? web = null;
-        if (store is not null)
+        // 再起動する本体は、このブロックを抜けて Mutex・フック・WebUI を全て解放してから起動する。
+        using (var single = SingleInstance.TryAcquire("host"))
         {
-            web = new SettingsServer(
-                store,
-                statusJson: () => StatusJson(state, engine),
-                webRoot: Path.Combine(AppContext.BaseDirectory, "wwwroot"),
-                onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles));
-            web.Start();
+            if (!single.Acquired) return ExitAlreadyRunning;
+
+            var state = new HostState();
+            using var server = new ControlServer(state);
+            server.Start();
+
+            // 設定の正本はユーザーごとの保存先。無ければ既定設定から作る。
+            var defaultsPath = FindDefaultSettings();
+            var store = defaultsPath is null ? null : new SettingsStore(SettingsStore.DefaultSettingsPath, defaultsPath);
+            var profiles = store is null
+                ? Array.Empty<HotkeyProfile>()
+                : store.Load().Profiles.ToArray();
+
+            using (var engine = new InputEngine(profiles))
+            {
+                var engineStarted = engine.Start();
+
+                // フックを設置できなかった場合は動作中として扱わない。
+                if (!engineStarted) state.Pause();
+                state.StateChanged += next => engine.Enabled = next == RuntimeState.Running;
+
+                SettingsServer? web = null;
+                try
+                {
+                    if (store is not null)
+                    {
+                        web = new SettingsServer(
+                            store,
+                            statusJson: () => StatusJson(state, engine),
+                            webRoot: Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+                            onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles));
+                        web.Start();
+                    }
+
+                    ApplicationConfiguration.Initialize();
+                    using var tray = new TrayApplication(state, server, web?.Url);
+                    Action requestRestart = () => restartRequested = true;
+                    tray.RestartRequested += requestRestart;
+                    Application.Run(tray);
+                    tray.RestartRequested -= requestRestart;
+                }
+                finally
+                {
+                    web?.Dispose();
+
+                    // ゲーム保護の退避を含め、終了前に必ずフック解除とキー解放を行う。
+                    engine.Stop();
+
+                    // 終了理由が未設定のまま Application.Run を抜けた場合も手動終了として扱う。
+                    if (state.ExitReason == ExitReason.None) state.BeginShutdown(ExitReason.Manual);
+                }
+            }
         }
 
-        ApplicationConfiguration.Initialize();
-        using var tray = new TrayApplication(state, server, web?.Url);
-        Application.Run(tray);
+        return restartRequested ? RestartHost() : ExitOk;
+    }
 
-        web?.Dispose();
-
-        // ゲーム保護の退避を含め、終了前に必ずフック解除とキー解放を行う。
-        engine.Stop();
-
-        // 終了理由が未設定のまま Application.Run を抜けた場合も手動終了として扱う。
-        if (state.ExitReason == ExitReason.None) state.BeginShutdown(ExitReason.Manual);
-        return ExitOk;
+    private static int RestartHost()
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = Application.ExecutablePath,
+                UseShellExecute = true,
+                WorkingDirectory = AppContext.BaseDirectory,
+            });
+            return process is null ? ExitCheckFailed : ExitOk;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return ExitCheckFailed;
+        }
     }
 
     /// <summary>WebUI へ返す現在の状態。</summary>

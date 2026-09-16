@@ -14,6 +14,9 @@ public sealed class TrayApplication : ApplicationContext
 
     private readonly string? _settingsUrl;
 
+    /// <summary>すべてのリソースを解放した後に、本体を起動し直す要求。</summary>
+    public event Action? RestartRequested;
+
     public TrayApplication(HostState state, ControlServer server, string? settingsUrl = null)
     {
         _state = state;
@@ -21,6 +24,7 @@ public sealed class TrayApplication : ApplicationContext
         _settingsUrl = settingsUrl;
 
         _toggleItem = new ToolStripMenuItem("一時停止", null, (_, _) => Toggle());
+        var restartItem = new ToolStripMenuItem("再起動", null, (_, _) => RequestRestart());
         var exitItem = new ToolStripMenuItem("終了", null, (_, _) => RequestExit(ExitReason.Manual));
         var settingsItem = new ToolStripMenuItem("設定を開く", null, (_, _) => OpenSettings())
         {
@@ -29,6 +33,7 @@ public sealed class TrayApplication : ApplicationContext
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(settingsItem);
+        menu.Items.Add(restartItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_toggleItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -94,6 +99,13 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
+        ExitThread();
+    }
+
+    private void RequestRestart()
+    {
+        _state.BeginShutdown(ExitReason.Manual);
+        RestartRequested?.Invoke();
         ExitThread();
     }
 
