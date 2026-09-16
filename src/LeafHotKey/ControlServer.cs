@@ -5,7 +5,7 @@ using System.Text;
 namespace LeafHotKey;
 
 /// <summary>
-/// 本体側の制御チャネル。1接続ずつ順に処理する。
+/// 本体側の制御チャネル。接続ごとに独立して処理する。
 /// 同一ユーザーのクライアントだけを受け付け、他ユーザーからの接続は拒否する。
 /// </summary>
 public sealed class ControlServer : IDisposable
@@ -14,7 +14,11 @@ public sealed class ControlServer : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly string _pipeName;
     private readonly string _ownerSid;
+    private readonly object _clientsGate = new();
+    private readonly HashSet<Task> _clients = new();
     private Task? _loop;
+
+    private static readonly TimeSpan ClientTimeout = TimeSpan.FromSeconds(5);
 
     public ControlServer(HostState state, string? pipeName = null)
     {
@@ -50,7 +54,17 @@ public sealed class ControlServer : IDisposable
                     outBufferSize: 4096);
 
                 await pipe.WaitForConnectionAsync(token).ConfigureAwait(false);
-                await HandleClientAsync(pipe, token).ConfigureAwait(false);
+                if (token.IsCancellationRequested) break;
+
+                var connectedPipe = pipe;
+                pipe = null;
+                var client = HandleClientLifetimeAsync(connectedPipe, token);
+                lock (_clientsGate)
+                {
+                    // 完了済みタスクを保持し続けない。登録との競合を避けるため、追加前に掃除する。
+                    _clients.RemoveWhere(static task => task.IsCompleted);
+                    _clients.Add(client);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -69,23 +83,55 @@ public sealed class ControlServer : IDisposable
                 pipe?.Dispose();
             }
         }
+
+        Task[] clients;
+        lock (_clientsGate) clients = _clients.ToArray();
+        await Task.WhenAll(clients).ConfigureAwait(false);
+    }
+
+    private async Task HandleClientLifetimeAsync(NamedPipeServerStream pipe, CancellationToken serverToken)
+    {
+        try
+        {
+            await HandleClientAsync(pipe, serverToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 接続単位のタイムアウトまたはサーバー終了による切断。
+        }
+        catch (IOException)
+        {
+            // クライアントが途中で切断した場合は次の接続を受け付ける。
+        }
+        catch (InvalidOperationException)
+        {
+            // 接続状態が想定外になった場合も、他の接続処理は継続する。
+        }
+        finally
+        {
+            pipe.Dispose();
+        }
     }
 
     private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken token)
     {
+        using var clientCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        clientCts.CancelAfter(ClientTimeout);
+        var clientToken = clientCts.Token;
+
         // 先にコマンドを受け取る。偽装情報はクライアントが送信した後でないと参照できない。
         using var reader = new StreamReader(pipe, new UTF8Encoding(false), false, 1024, leaveOpen: true);
-        var line = await reader.ReadLineAsync(token).ConfigureAwait(false);
+        var line = await reader.ReadLineAsync(clientToken).ConfigureAwait(false);
         if (line is null) return;
 
         if (!IsSameUser(pipe))
         {
-            await WriteLineAsync(pipe, ControlProtocol.Error("FORBIDDEN"), token).ConfigureAwait(false);
+            await WriteLineAsync(pipe, ControlProtocol.Error("FORBIDDEN"), clientToken).ConfigureAwait(false);
             return;
         }
 
         var response = Handle(line.Trim());
-        await WriteLineAsync(pipe, response, token).ConfigureAwait(false);
+        await WriteLineAsync(pipe, response, clientToken).ConfigureAwait(false);
     }
 
     private bool IsSameUser(NamedPipeServerStream pipe)
