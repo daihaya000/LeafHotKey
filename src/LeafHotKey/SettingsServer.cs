@@ -290,6 +290,15 @@ public sealed class SettingsServer : IDisposable
         }
 
         var content = await File.ReadAllTextAsync(file, new UTF8Encoding(false)).ConfigureAwait(false);
+        if (string.Equals(name, "index.html", StringComparison.OrdinalIgnoreCase))
+        {
+            // ブラウザのサブリソース要求にも、初回ページと同じ認証トークンを付ける。
+            content = content.Replace(
+                "__LEAFHOTKEY_TOKEN__",
+                Uri.EscapeDataString(Token),
+                StringComparison.Ordinal);
+        }
+
         await WriteAsync(stream, 200, contentType, content).ConfigureAwait(false);
     }
 

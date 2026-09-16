@@ -120,17 +120,24 @@ public static class ServerSelfCheck
                 var uiOrigin = $"http://{uiHost}";
 
                 var index = Send(uiServer.Port, "GET", "/", uiHost, uiOrigin, uiServer.Token);
+                var assetToken = Uri.EscapeDataString(uiServer.Token);
                 Check(
                     "webui.index",
-                    index.Status == 200 && index.Body.Contains("LeafHotKey", StringComparison.Ordinal) && index.Body.Contains("app.js", StringComparison.Ordinal),
-                    "WebUI の index.html を配信できる");
-                Check("webui.css", Send(uiServer.Port, "GET", "/styles.css", uiHost, uiOrigin, uiServer.Token).Status == 200, "styles.css を配信できる");
+                    index.Status == 200 && index.Body.Contains("LeafHotKey", StringComparison.Ordinal) &&
+                    index.Body.Contains($"styles.css?token={assetToken}", StringComparison.Ordinal) &&
+                    index.Body.Contains($"app.js?token={assetToken}", StringComparison.Ordinal) &&
+                    !index.Body.Contains("__LEAFHOTKEY_TOKEN__", StringComparison.Ordinal),
+                    "WebUI の index.html を配信し、サブリソースへトークンを埋め込む");
+                Check(
+                    "webui.css",
+                    Send(uiServer.Port, "GET", "/styles.css?token=" + assetToken, uiHost, uiOrigin, token: null).Status == 200,
+                    "ブラウザ形式のトークン付き styles.css を配信できる");
 
-                var script = Send(uiServer.Port, "GET", "/app.js", uiHost, uiOrigin, uiServer.Token);
+                var script = Send(uiServer.Port, "GET", "/app.js?token=" + assetToken, uiHost, uiOrigin, token: null);
                 Check(
                     "webui.js",
                     script.Status == 200 && script.Body.Contains("X-LeafHotKey-Token", StringComparison.Ordinal),
-                    "app.js を配信し、トークンを付けて呼び出す");
+                    "ブラウザ形式のトークン付き app.js を配信できる");
 
                 var snapshot2 = store2.Load();
                 var body2 = JsonSerializer.Serialize(new
