@@ -19,6 +19,8 @@ public static class Program
         {
             case "--check":
                 return SelfCheck.Run(args.Length > 1 ? args[1] : null);
+            case "--check-send":
+                return SendSelfCheck.Run(args.Length > 1 ? args[1] : null);
             case "--check-profiles":
                 return ProfileSelfCheck.Run(
                     args.Length > 1 ? args[1] : null,
