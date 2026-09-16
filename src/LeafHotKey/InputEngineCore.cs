@@ -89,7 +89,7 @@ public sealed class InputEngineCore
             if (combo is null) continue;
 
             _heldPrefixes[prefix] = true;
-            return Execute(combo, key);
+            return Execute(combo, key, firedOnKeyUp: false);
         }
 
         // 2. 修飾キーまで一致する通常のルール。
@@ -108,7 +108,7 @@ public sealed class InputEngineCore
                 return HasPassthrough(profile, key) ? InputDecision.PassThrough : InputDecision.Suppress;
             }
 
-            return Execute(exact, key);
+            return Execute(exact, key, firedOnKeyUp: false);
         }
 
         // 3. 前置キーとしてのみ使うキー。
@@ -156,11 +156,15 @@ public sealed class InputEngineCore
 
         if (standalone is null) return decision;
 
-        var standaloneDecision = Execute(standalone, key);
+        var standaloneDecision = Execute(standalone, key, firedOnKeyUp: true);
         return HasPassthrough(profile, key) ? decision : standaloneDecision;
     }
 
-    private InputDecision Execute(HotkeyRule rule, string key)
+    /// <param name="firedOnKeyUp">
+    /// 前置キーの単体動作のように、トリガキーが既に離された後で実行する場合は true。
+    /// このとき保持は成立しないため、押して即座に離す（保持キーが残らないようにする）。
+    /// </param>
+    private InputDecision Execute(HotkeyRule rule, string key, bool firedOnKeyUp)
     {
         switch (rule.Kind)
         {
@@ -171,6 +175,15 @@ public sealed class InputEngineCore
             case HotkeyActionKind.Hold when rule.HoldModifier is { } modifier:
             {
                 var releaseOn = rule.ReleaseOn ?? key;
+
+                if (firedOnKeyUp && KeyMatches(releaseOn, key))
+                {
+                    // 解除条件のキーが既に離れているため、押しっぱなしにせず一度だけ押す。
+                    _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Down, SendModifiers.None) });
+                    _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Up, SendModifiers.None) });
+                    break;
+                }
+
                 if (!_activeHolds.TryGetValue(releaseOn, out var list))
                 {
                     list = new List<string>();
