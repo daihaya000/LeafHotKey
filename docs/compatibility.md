@@ -82,6 +82,7 @@
 4. `MySet.ahk:352` UE の `f22` と `f24` が両方 `^+i` で重複している。
 5. `MySet.ahk:419-420` MoI の `MButton & f23` と `f24` が両方 `!o` で重複している。
 6. Clip Studio と Photoshop は `MButton::{Enter}`（単体）と `*~MButton`（通過）を併記している。単体押下と前置利用の優先順位を実装で再現する必要がある。
+7. UE / Phoenix の Swap で使う `{AltDown}` `{ShiftUp}` は、AHK 標準の `{Alt down}`（空白あり）と異なる表記。実装側は両方を「修飾キーの押下／解放」として解釈しているが、元 AHK で実際に修飾キーとして動作していたかは実機確認が必要。
 
 ## 6. 検証方法
 
