@@ -24,6 +24,8 @@ public sealed class SettingsServer : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
 
+    private static readonly TimeSpan ClientTimeout = TimeSpan.FromSeconds(5);
+
     public SettingsServer(
         SettingsStore store,
         int port = 0,
@@ -81,16 +83,19 @@ public sealed class SettingsServer : IDisposable
                 break;
             }
 
-            _ = Task.Run(() => HandleClientAsync(client), CancellationToken.None);
+            _ = Task.Run(() => HandleClientAsync(client, token), CancellationToken.None);
         }
     }
 
-    private async Task HandleClientAsync(TcpClient client)
+    private async Task HandleClientAsync(TcpClient client, CancellationToken serverToken)
     {
         using (client)
         {
             client.ReceiveTimeout = 5000;
             client.SendTimeout = 5000;
+            using var clientCts = CancellationTokenSource.CreateLinkedTokenSource(serverToken);
+            clientCts.CancelAfter(ClientTimeout);
+            var clientToken = clientCts.Token;
 
             try
             {
@@ -103,7 +108,7 @@ public sealed class SettingsServer : IDisposable
                     return;
                 }
 
-                var request = await ReadRequestAsync(stream).ConfigureAwait(false);
+                var request = await ReadRequestAsync(stream, clientToken).ConfigureAwait(false);
                 if (request is null)
                 {
                     await WriteAsync(stream, 400, "text/plain; charset=utf-8", "bad request").ConfigureAwait(false);
@@ -117,6 +122,10 @@ public sealed class SettingsServer : IDisposable
                 }
 
                 await RouteAsync(stream, request).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // 接続単位のタイムアウトまたはサーバー終了による切断。
             }
             catch (IOException)
             {
@@ -344,7 +353,7 @@ public sealed class SettingsServer : IDisposable
         _ => "Internal Server Error",
     };
 
-    private static async Task<HttpRequest?> ReadRequestAsync(Stream stream)
+    private static async Task<HttpRequest?> ReadRequestAsync(Stream stream, CancellationToken token)
     {
         var buffer = new List<byte>(1024);
         var single = new byte[1];
@@ -352,7 +361,7 @@ public sealed class SettingsServer : IDisposable
 
         while (buffer.Count < 16 * 1024)
         {
-            var read = await stream.ReadAsync(single).ConfigureAwait(false);
+            var read = await stream.ReadAsync(single, token).ConfigureAwait(false);
             if (read == 0) break;
 
             buffer.Add(single[0]);
@@ -406,7 +415,7 @@ public sealed class SettingsServer : IDisposable
             var offset = 0;
             while (offset < contentLength)
             {
-                var read = await stream.ReadAsync(bodyBuffer.AsMemory(offset, contentLength - offset)).ConfigureAwait(false);
+                var read = await stream.ReadAsync(bodyBuffer.AsMemory(offset, contentLength - offset), token).ConfigureAwait(false);
                 if (read == 0) break;
                 offset += read;
             }
