@@ -62,9 +62,22 @@ public static class SelfCheck
             !ControlClient.IsHostResponding(300, "LeafHotKey.absent." + Guid.NewGuid().ToString("N")),
             "接続断は応答ありと判定しない");
 
-        Check("shutdown", Call("shutdown", ControlProtocol.Shutdown) == "OK SHUTTINGDOWN", "SHUTDOWN を受け付ける");
+        Check("shutdown.unknownreason", Call("shutdown.unknownreason", "SHUTDOWN OOPS") == "ERR UNKNOWN_REASON", "未知の終了理由を拒否する");
+        Check("shutdown", Call("shutdown", ControlProtocol.Shutdown) == "OK SHUTTINGDOWN MANUAL", "引数なし SHUTDOWN は手動終了");
         Check("shutdown.reason", state.ExitReason == ExitReason.Manual, "手動終了として記録する（自動再起動しない）");
         Check("shutdown.event", Volatile.Read(ref shutdownRequested) == 1, "終了要求イベントが 1 回発火する");
+
+        // ゲーム保護による退避は別の終了理由として記録される必要がある。
+        var gamePipeName = "LeafHotKey.selfcheck." + Guid.NewGuid().ToString("N");
+        var gameState = new HostState();
+        using var gameServer = new ControlServer(gameState, gamePipeName);
+        gameServer.Start();
+        var gameResponse = ControlClient.Send(
+            ControlProtocol.Shutdown + " " + ControlProtocol.ReasonGame,
+            2000,
+            gamePipeName);
+        Check("shutdown.game", gameResponse == "OK SHUTTINGDOWN GAME", "ゲーム保護の退避を受け付ける");
+        Check("shutdown.game.reason", gameState.ExitReason == ExitReason.GameProtection, "退避理由を GameProtection として記録する");
 
         var role = "selfcheck." + Guid.NewGuid().ToString("N");
         using (var first = SingleInstance.TryAcquire(role))

@@ -11,6 +11,12 @@ public static class ControlProtocol
     public const string Resume = "RESUME";
     public const string Shutdown = "SHUTDOWN";
 
+    /// <summary>SHUTDOWN の引数。ゲーム保護による退避を示す（復帰対象）。</summary>
+    public const string ReasonGame = "GAME";
+
+    /// <summary>SHUTDOWN の引数。手動終了を示す（自動復帰しない）。</summary>
+    public const string ReasonManual = "MANUAL";
+
     public const string Pong = "OK PONG";
     public const string ErrorPrefix = "ERR ";
 

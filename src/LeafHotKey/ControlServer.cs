@@ -112,7 +112,11 @@ public sealed class ControlServer : IDisposable
 
     internal string Handle(string command)
     {
-        switch (command.ToUpperInvariant())
+        var parts = command.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var verb = parts.Length > 0 ? parts[0] : string.Empty;
+        var argument = parts.Length > 1 ? parts[1].ToUpperInvariant() : string.Empty;
+
+        switch (verb.ToUpperInvariant())
         {
             case ControlProtocol.Ping:
                 return ControlProtocol.Pong;
@@ -127,9 +131,20 @@ public sealed class ControlServer : IDisposable
                     ? ControlProtocol.Ok("RUNNING")
                     : ControlProtocol.Error("NOT_PAUSED");
             case ControlProtocol.Shutdown:
-                _state.BeginShutdown(ExitReason.Manual);
+            {
+                // 引数が無い場合は手動終了として扱い、自動復帰対象にしない。
+                if (argument.Length > 0 && argument != ControlProtocol.ReasonGame && argument != ControlProtocol.ReasonManual)
+                {
+                    return ControlProtocol.Error("UNKNOWN_REASON");
+                }
+
+                var reason = argument == ControlProtocol.ReasonGame ? ExitReason.GameProtection : ExitReason.Manual;
+                _state.BeginShutdown(reason);
                 ShutdownRequested?.Invoke();
-                return ControlProtocol.Ok("SHUTTINGDOWN");
+                return ControlProtocol.Ok("SHUTTINGDOWN " + (reason == ExitReason.GameProtection
+                    ? ControlProtocol.ReasonGame
+                    : ControlProtocol.ReasonManual));
+            }
             default:
                 return ControlProtocol.Error("UNKNOWN_COMMAND");
         }

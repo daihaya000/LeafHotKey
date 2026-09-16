@@ -15,6 +15,16 @@ public static class Program
 
     public static int Main(string[] args)
     {
+        // 日本語ログをリダイレクトしても化けないよう、出力を UTF-8（BOMなし）に固定する。
+        try
+        {
+            Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+        }
+        catch (IOException)
+        {
+            // コンソールが無い環境では既定のまま使う。
+        }
+
         var mode = args.Length > 0 ? args[0].ToLowerInvariant() : string.Empty;
 
         switch (mode)
@@ -29,8 +39,14 @@ public static class Program
             case "--check":
                 return SelfCheck();
 
+            case "--check-lifecycle":
+                return WatcherSelfCheck.Run(args.Length > 1 ? args[1] : null);
+
+            case "--run":
+                return RunLoop(args.Length > 1 ? args[1] : null);
+
             default:
-                Console.Error.WriteLine("usage: LeafHotKeyWatcher.exe [--ping|--start-host <path>|--check]");
+                Console.Error.WriteLine("usage: LeafHotKeyWatcher.exe [--ping|--start-host <path>|--check|--check-lifecycle [settings.json]|--run [settings.json]]");
                 return ExitFailed;
         }
     }
@@ -66,6 +82,79 @@ public static class Program
             Console.Error.WriteLine($"本体の起動に失敗しました: {ex.Message}");
             return ExitFailed;
         }
+    }
+
+    /// <summary>監視ループ。停止状態（手動終了・退避失敗・起動失敗）になったら終了する。</summary>
+    private static int RunLoop(string? settingsPath)
+    {
+        using var single = SingleInstance.TryAcquire("watcher");
+        if (!single.Acquired)
+        {
+            Console.Error.WriteLine("Watcher は既に動作しています。");
+            return ExitAlreadyRunning;
+        }
+
+        var path = settingsPath ?? FindDefaultSettings();
+        if (path is null)
+        {
+            Console.Error.WriteLine("settings.json が見つかりません。");
+            return ExitFailed;
+        }
+
+        GameProtectionSettings settings;
+        try
+        {
+            settings = GameProtectionSettings.Load(path);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException or IOException)
+        {
+            Console.Error.WriteLine($"設定を読み込めません: {ex.Message}");
+            return ExitFailed;
+        }
+
+        var hostPath = Path.Combine(AppContext.BaseDirectory, "LeafHotKey.exe");
+        var controller = new LifecycleController(settings, new GameMonitor(), new HostControl(hostPath));
+
+        using var stop = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            stop.Cancel();
+        };
+
+        var lastMessage = string.Empty;
+        while (!stop.IsCancellationRequested && controller.State != LifecycleState.Stopped)
+        {
+            controller.Tick(DateTimeOffset.UtcNow);
+            if (controller.LastMessage != lastMessage && controller.LastMessage.Length > 0)
+            {
+                lastMessage = controller.LastMessage;
+                Console.WriteLine(lastMessage);
+            }
+
+            if (stop.Token.WaitHandle.WaitOne(settings.PollIntervalMs)) break;
+        }
+
+        if (controller.LastMessage.Length > 0 && controller.LastMessage != lastMessage)
+        {
+            Console.WriteLine(controller.LastMessage);
+        }
+
+        return controller.StopCause is StopCause.ShutdownFailed or StopCause.StartFailed ? ExitFailed : ExitOk;
+    }
+
+    /// <summary>実行ディレクトリから上位へ defaults/settings.json を探す。</summary>
+    private static string? FindDefaultSettings()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "defaults", "settings.json");
+            if (File.Exists(candidate)) return candidate;
+            directory = directory.Parent;
+        }
+
+        return null;
     }
 
     /// <summary>GUI を起動せずに Watcher 側の前提だけを検証する。</summary>

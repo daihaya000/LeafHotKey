@@ -18,6 +18,7 @@
     <Compile Include="..\LeafHotKey\ControlProtocol.cs" Link="Shared\ControlProtocol.cs" />
     <Compile Include="..\LeafHotKey\ControlClient.cs" Link="Shared\ControlClient.cs" />
     <Compile Include="..\LeafHotKey\SingleInstance.cs" Link="Shared\SingleInstance.cs" />
+    <Compile Include="..\LeafHotKey\GameProtectionSettings.cs" Link="Shared\GameProtectionSettings.cs" />
   </ItemGroup>
 
 </Project>
