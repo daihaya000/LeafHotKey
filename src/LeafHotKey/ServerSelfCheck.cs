@@ -102,6 +102,50 @@ public static class ServerSelfCheck
             var page = Send(server.Port, "GET", "/", host, origin, server.Token);
             Check("static.served", page.Status == 200 && page.Body.Contains("doctype", StringComparison.OrdinalIgnoreCase), "index.html を配信できる");
             Check("static.unauthorized", Send(server.Port, "GET", "/", host, origin, token: null).Status == 401, "ページ自体もトークンを要求する");
+
+            // 実際に配信する WebUI と、保存後の反映通知。
+            var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            if (!Directory.Exists(webRoot))
+            {
+                Check("webui.present", false, $"wwwroot が見つからない: {webRoot}");
+            }
+            else
+            {
+                SettingsSnapshot? applied = null;
+                var store2 = new SettingsStore(Path.Combine(workDirectory, "settings2.json"), defaults);
+                using var uiServer = new SettingsServer(store2, webRoot: webRoot, onSaved: snapshot => applied = snapshot);
+                uiServer.Start();
+
+                var uiHost = $"127.0.0.1:{uiServer.Port}";
+                var uiOrigin = $"http://{uiHost}";
+
+                var index = Send(uiServer.Port, "GET", "/", uiHost, uiOrigin, uiServer.Token);
+                Check(
+                    "webui.index",
+                    index.Status == 200 && index.Body.Contains("LeafHotKey", StringComparison.Ordinal) && index.Body.Contains("app.js", StringComparison.Ordinal),
+                    "WebUI の index.html を配信できる");
+                Check("webui.css", Send(uiServer.Port, "GET", "/styles.css", uiHost, uiOrigin, uiServer.Token).Status == 200, "styles.css を配信できる");
+
+                var script = Send(uiServer.Port, "GET", "/app.js", uiHost, uiOrigin, uiServer.Token);
+                Check(
+                    "webui.js",
+                    script.Status == 200 && script.Body.Contains("X-LeafHotKey-Token", StringComparison.Ordinal),
+                    "app.js を配信し、トークンを付けて呼び出す");
+
+                var snapshot2 = store2.Load();
+                var body2 = JsonSerializer.Serialize(new
+                {
+                    revision = snapshot2.Revision,
+                    json = snapshot2.Json.Replace("\"resumeDelayMs\": 1000", "\"resumeDelayMs\": 1500", StringComparison.Ordinal),
+                });
+
+                var applyResult = Send(uiServer.Port, "POST", "/api/settings", uiHost, uiOrigin, uiServer.Token, body2);
+                Check("webui.save", applyResult.Status == 200, "WebUI 経由の保存が通る");
+                Check(
+                    "webui.applied",
+                    applied is not null && applied.Profiles.Count == 13 && applied.GameProtection.ResumeDelayMs == 1500,
+                    "保存後に新しい設定が呼び出し側へ渡る");
+            }
         }
         finally
         {

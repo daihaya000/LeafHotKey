@@ -74,10 +74,12 @@ public static class Program
         using var server = new ControlServer(state);
         server.Start();
 
-        var settingsPath = FindDefaultSettings();
-        var profiles = settingsPath is null
+        // 設定の正本はユーザーごとの保存先。無ければ既定設定から作る。
+        var defaultsPath = FindDefaultSettings();
+        var store = defaultsPath is null ? null : new SettingsStore(SettingsStore.DefaultSettingsPath, defaultsPath);
+        var profiles = store is null
             ? Array.Empty<HotkeyProfile>()
-            : HotkeyProfileLoader.Load(settingsPath).ToArray();
+            : store.Load().Profiles.ToArray();
 
         using var engine = new InputEngine(profiles);
         var engineStarted = engine.Start();
@@ -86,9 +88,22 @@ public static class Program
         if (!engineStarted) state.Pause();
         state.StateChanged += next => engine.Enabled = next == RuntimeState.Running;
 
+        SettingsServer? web = null;
+        if (store is not null)
+        {
+            web = new SettingsServer(
+                store,
+                statusJson: () => StatusJson(state, engine),
+                webRoot: Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+                onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles));
+            web.Start();
+        }
+
         ApplicationConfiguration.Initialize();
-        using var tray = new TrayApplication(state, server);
+        using var tray = new TrayApplication(state, server, web?.Url);
         Application.Run(tray);
+
+        web?.Dispose();
 
         // ゲーム保護の退避を含め、終了前に必ずフック解除とキー解放を行う。
         engine.Stop();
@@ -97,6 +112,15 @@ public static class Program
         if (state.ExitReason == ExitReason.None) state.BeginShutdown(ExitReason.Manual);
         return ExitOk;
     }
+
+    /// <summary>WebUI へ返す現在の状態。</summary>
+    private static string StatusJson(HostState state, InputEngine engine)
+        => System.Text.Json.JsonSerializer.Serialize(new
+        {
+            state = state.State.ToString().ToLowerInvariant(),
+            engineInstalled = engine.Installed,
+            activeProfile = engine.ActiveProfileName,
+        });
 
     /// <summary>実行ディレクトリから上位へ defaults/settings.json を探す。</summary>
     private static string? FindDefaultSettings()

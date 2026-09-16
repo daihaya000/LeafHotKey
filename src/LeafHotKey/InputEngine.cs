@@ -8,7 +8,7 @@ namespace LeafHotKey;
 /// </summary>
 public sealed class InputEngine : IDisposable
 {
-    private readonly IReadOnlyList<HotkeyProfile> _profiles;
+    private volatile IReadOnlyList<HotkeyProfile> _profiles;
     private readonly KeySender _sender;
     private readonly InputEngineCore _core;
     private readonly ForegroundApp _foreground = new();
@@ -66,6 +66,16 @@ public sealed class InputEngine : IDisposable
     }
 
     public bool Installed => _keyboardHook != IntPtr.Zero && _mouseHook != IntPtr.Zero;
+
+    /// <summary>
+    /// 設定保存後に新しいプロファイルへ差し替える。
+    /// 入れ替え前に保持中のキーを解放し、古い割り当てのまま押しっぱなしにならないようにする。
+    /// </summary>
+    public void ApplyProfiles(IReadOnlyList<HotkeyProfile> profiles)
+    {
+        _core.SetActiveProfile(null);
+        _profiles = profiles;
+    }
 
     public string ActiveProfileName => _core.ActiveProfile?.Name ?? string.Empty;
 

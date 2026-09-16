@@ -11,15 +11,24 @@ public sealed class TrayApplication : ApplicationContext
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _toggleItem;
 
-    public TrayApplication(HostState state, ControlServer server)
+    private readonly string? _settingsUrl;
+
+    public TrayApplication(HostState state, ControlServer server, string? settingsUrl = null)
     {
         _state = state;
         _server = server;
+        _settingsUrl = settingsUrl;
 
         _toggleItem = new ToolStripMenuItem("一時停止", null, (_, _) => Toggle());
         var exitItem = new ToolStripMenuItem("終了", null, (_, _) => RequestExit(ExitReason.Manual));
+        var settingsItem = new ToolStripMenuItem("設定を開く", null, (_, _) => OpenSettings())
+        {
+            Enabled = _settingsUrl is not null,
+        };
 
         var menu = new ContextMenuStrip();
+        menu.Items.Add(settingsItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_toggleItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
@@ -34,6 +43,25 @@ public sealed class TrayApplication : ApplicationContext
         _state.StateChanged += OnStateChanged;
         _server.ShutdownRequested += OnShutdownRequested;
         UpdateSurface(_state.State);
+    }
+
+    /// <summary>既定のブラウザで設定画面を開く。URL にはこの起動だけのトークンが含まれる。</summary>
+    private void OpenSettings()
+    {
+        if (_settingsUrl is null) return;
+
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = _settingsUrl,
+                UseShellExecute = true,
+            });
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // 既定のブラウザが無い環境では何もしない。
+        }
     }
 
     private void Toggle()

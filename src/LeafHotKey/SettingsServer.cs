@@ -19,15 +19,22 @@ public sealed class SettingsServer : IDisposable
     private readonly SettingsStore _store;
     private readonly Func<string>? _statusJson;
     private readonly string? _webRoot;
+    private readonly Action<SettingsSnapshot>? _onSaved;
     private readonly TcpListener _listener;
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
 
-    public SettingsServer(SettingsStore store, int port = 0, Func<string>? statusJson = null, string? webRoot = null)
+    public SettingsServer(
+        SettingsStore store,
+        int port = 0,
+        Func<string>? statusJson = null,
+        string? webRoot = null,
+        Action<SettingsSnapshot>? onSaved = null)
     {
         _store = store;
         _statusJson = statusJson;
         _webRoot = webRoot;
+        _onSaved = onSaved;
         _listener = new TcpListener(IPAddress.Loopback, port);
         Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .Replace('+', '-')
@@ -178,6 +185,8 @@ public sealed class SettingsServer : IDisposable
                 }
 
                 var result = _store.Save(json, revision);
+                if (result.Success) NotifySaved();
+
                 var status = result.Status switch
                 {
                     SaveStatus.Saved => 200,
@@ -200,6 +209,8 @@ public sealed class SettingsServer : IDisposable
             case ("POST", "/api/settings/restore"):
             {
                 var result = _store.RestoreDefaults();
+                if (result.Success) NotifySaved();
+
                 var body = JsonSerializer.Serialize(new
                 {
                     status = result.Status.ToString().ToLowerInvariant(),
@@ -221,6 +232,21 @@ public sealed class SettingsServer : IDisposable
             default:
                 await ServeStaticAsync(stream, request).ConfigureAwait(false);
                 return;
+        }
+    }
+
+    /// <summary>保存された内容を呼び出し側へ渡す。反映に失敗しても保存自体は完了している。</summary>
+    private void NotifySaved()
+    {
+        if (_onSaved is null) return;
+
+        try
+        {
+            _onSaved(_store.Load());
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or FormatException)
+        {
+            // 反映できない場合も応答は返す。呼び出し側が状態表示で扱う。
         }
     }
 

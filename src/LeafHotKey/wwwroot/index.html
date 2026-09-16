@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="referrer" content="no-referrer" />
+    <title>LeafHotKey 設定</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">LeafHotKey</div>
+      <div class="status-line">
+        <span class="dot" id="state-dot" aria-hidden="true"></span>
+        <span id="state-text">状態を取得しています…</span>
+      </div>
+    </header>
+
+    <main class="content">
+      <p id="alert" class="alert" role="alert" hidden></p>
+
+      <section class="card" aria-labelledby="overview-title">
+        <h1 id="overview-title">概要</h1>
+        <dl class="facts">
+          <dt>入力変換</dt>
+          <dd id="fact-state">-</dd>
+          <dt>前面アプリ</dt>
+          <dd id="fact-foreground">-</dd>
+          <dt>プロファイル</dt>
+          <dd id="fact-profiles">-</dd>
+          <dt>ルール</dt>
+          <dd id="fact-rules">-</dd>
+          <dt>設定の版</dt>
+          <dd id="fact-revision" class="mono">-</dd>
+        </dl>
+      </section>
+
+      <section class="card" aria-labelledby="protection-title">
+        <h2 id="protection-title">ゲーム保護</h2>
+        <p class="note">検知リスクのあるゲームが起動している間は入力エンジンを停止し、本体を終了します。ゲーム終了後に自動で再起動します。</p>
+
+        <div class="row">
+          <label class="row-main" for="protection-enabled">
+            <span class="row-title">ゲーム保護を有効にする</span>
+            <span class="row-note">無効にすると検知しても退避しません。</span>
+          </label>
+          <input type="checkbox" id="protection-enabled" />
+        </div>
+
+        <div class="grid">
+          <label class="field">
+            <span>監視間隔（ミリ秒）</span>
+            <input type="number" id="poll-interval" min="1" step="100" />
+          </label>
+          <label class="field">
+            <span>復帰までの待機（ミリ秒）</span>
+            <input type="number" id="resume-delay" min="0" step="100" />
+          </label>
+        </div>
+
+        <div class="grid">
+          <label class="field">
+            <span>退避トリガのプロセス（1行に1件）</span>
+            <textarea id="stop-triggers" rows="6" spellcheck="false"></textarea>
+          </label>
+          <label class="field">
+            <span>復帰を待つプロセス（1行に1件）</span>
+            <textarea id="resume-processes" rows="6" spellcheck="false"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="profiles-title">
+        <h2 id="profiles-title">プロファイル</h2>
+        <p class="note">前面アプリごとのキー変換です。有効・無効を切り替えられます。割り当ての編集は下の JSON で行います。</p>
+        <div id="profiles"></div>
+      </section>
+
+      <section class="card" aria-labelledby="json-title">
+        <h2 id="json-title">設定 JSON</h2>
+        <p class="note">上のフォームの内容がここに反映されます。直接編集した場合は、その内容が保存されます。</p>
+        <textarea id="json" rows="16" spellcheck="false" class="mono"></textarea>
+      </section>
+    </main>
+
+    <footer class="actions">
+      <span id="save-state" class="save-state">読み込み中…</span>
+      <button type="button" id="reload">再読み込み</button>
+      <button type="button" id="restore" class="danger">既定に戻す</button>
+      <button type="button" id="save" class="primary">保存して反映</button>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
