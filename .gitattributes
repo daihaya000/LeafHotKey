@@ -1,0 +1,14 @@
+# 設定ファイルは環境によらず同じ内容になるよう LF に固定する。
+# （改行が変わると内容ハッシュ＝設定の版も変わるため）
+*.json text eol=lf
+
+# ソースとドキュメントも LF に揃える。
+*.cs text eol=lf
+*.csproj text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+
+# PowerShell スクリプトは Windows PowerShell 5.1 での実行を前提に CRLF とする。
+*.ps1 text eol=crlf

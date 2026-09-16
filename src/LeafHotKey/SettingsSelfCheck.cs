@@ -74,10 +74,10 @@ public static class SettingsSelfCheck
             Check("invalid.json.unchanged", store.Load().Revision == afterSave.Revision, "拒否後も内容が残る");
 
             // 設定として成立しない内容も拒否する。
-            var emptyTriggers = afterSave.Json.Replace(
-                "\"stopTriggerProcessNames\": [\n      \"PioneerGame.exe\"",
-                "\"stopTriggerProcessNames\": [\n      \"\"",
-                StringComparison.Ordinal);
+            // 改行コードに依存しないよう、文字列置換ではなく JSON を編集する。
+            var mutated = System.Text.Json.Nodes.JsonNode.Parse(afterSave.Json)!;
+            mutated["gameProtection"]!["stopTriggerProcessNames"] = new System.Text.Json.Nodes.JsonArray("");
+            var emptyTriggers = mutated.ToJsonString();
             var invalidRule = store.Save(emptyTriggers, store.Load().Revision);
             Check("invalid.rule", invalidRule.Status == SaveStatus.Invalid, $"空のプロセス名を拒否する（{invalidRule.Message}）");
 
