@@ -46,7 +46,7 @@
           <nav class="nav-list" aria-label="システムナビゲーション">
             <button class="nav-item" type="button" data-view-target="settings">
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
-              <span>設定 JSON</span>
+              <span>基本設定</span>
             </button>
           </nav>
 
@@ -129,9 +129,9 @@
           <section class="view" data-view="profiles" aria-labelledby="profiles-title">
             <div class="page-intro"><p class="eyebrow">設定</p><h1 id="profiles-title">プロファイル</h1><p class="intro-copy">前面アプリごとのキー変換を管理します。変更は保存後に入力エンジンへ反映されます。</p></div>
             <div class="card">
-              <div class="card-header"><div><h2>アプリ別の設定</h2><p class="fine" id="profile-count-label">設定を読み込んでいます。</p></div><button class="button button-secondary button-small" type="button" data-view-target="settings">JSONで編集</button></div>
+              <div class="card-header"><div><h2>アプリ別の設定</h2><p class="fine" id="profile-count-label">設定を読み込んでいます。</p></div><span class="fine">編集すると未保存になります</span></div>
               <div id="profile-list" class="settings-list" style="margin-top:16px"></div>
-              <div class="empty-state" id="profile-empty" hidden><p>プロファイルがありません。</p><button class="text-link" type="button" data-view-target="settings">設定 JSON を編集</button></div>
+              <div class="empty-state" id="profile-empty" hidden><p>プロファイルがありません。</p></div>
             </div>
           </section>
 
@@ -155,9 +155,15 @@
           </section>
 
           <section class="view" data-view="settings" aria-labelledby="settings-title">
-            <div class="page-intro"><p class="eyebrow">システム</p><h1 id="settings-title">設定 JSON</h1><p class="intro-copy">設定全体を確認・編集します。保存すると入力エンジンへ安全に反映されます。</p></div>
-            <div class="settings-tabs" role="tablist" aria-label="設定カテゴリ"><button class="settings-tab is-selected" type="button" role="tab" aria-selected="true">設定 JSON</button><span class="fine" style="align-self:center;margin:0 12px">版: <strong id="settings-revision">-</strong></span></div>
-            <section class="settings-section" aria-labelledby="json-heading"><h2 id="json-heading">設定 JSON</h2><p>直接編集した内容が保存されます。JSONとして正しく、設定の制約を満たす必要があります。</p><div class="card card-body"><textarea id="json" rows="20" spellcheck="false" class="mono" aria-label="設定 JSON"></textarea></div></section>
+            <div class="page-intro"><p class="eyebrow">システム</p><h1 id="settings-title">基本設定</h1><p class="intro-copy">入力変換の共通動作を設定します。変更は「保存して反映」で有効になります。</p></div>
+            <section class="card" aria-labelledby="input-heading">
+              <div class="card-header"><div><h2 id="input-heading">入力動作</h2><p class="fine">すべてのプロファイルに共通する設定です。</p></div><span class="fine">版: <strong id="settings-revision">-</strong></span></div>
+              <div class="settings-list" style="margin-top:16px">
+                <div class="settings-row"><div class="settings-row-main"><strong>送信前に IME を無効化</strong><p>キー列を送る前に日本語入力をオフにします。</p></div><button class="switch" type="button" id="ime-disable" role="switch" aria-checked="false" aria-label="送信前に IME を無効化する"></button></div>
+                <div class="settings-row"><div class="settings-row-main"><strong>キー送信の待機時間</strong><p>各入力間に置く待機時間です。</p></div><div class="field-inline"><input type="number" id="send-delay" min="0" step="1" aria-label="キー送信の待機時間（ミリ秒）" /><span>ミリ秒</span></div></div>
+                <div class="settings-row"><div class="settings-row-main"><strong>修飾キーを維持する</strong><p>送信時に押されている修飾キーを保持します。</p></div><button class="switch" type="button" id="default-blind" role="switch" aria-checked="false" aria-label="修飾キーを維持する"></button></div>
+              </div>
+            </section>
           </section>
 
           <div class="actions">
@@ -166,6 +172,19 @@
             <button class="button button-destructive button-small" type="button" id="restore">既定に戻す</button>
             <button class="button button-primary button-small" type="button" id="save">保存して反映</button>
           </div>
+
+          <dialog id="profile-dialog" aria-labelledby="profile-dialog-title">
+            <form method="dialog" class="dialog-body">
+              <div class="dialog-header"><div><h2 id="profile-dialog-title">プロファイルを編集</h2><p id="profile-dialog-meta">保存後に入力エンジンへ反映されます。</p></div><button class="icon-button" type="submit" value="cancel" aria-label="閉じる">×</button></div>
+              <div class="form-grid">
+                <div class="field"><label for="profile-name">表示名</label><input id="profile-name" required maxlength="80" /></div>
+                <div class="field profile-enabled-field"><label>有効</label><button class="switch" type="button" id="profile-enabled" role="switch" aria-checked="false" aria-label="プロファイルを有効にする"></button></div>
+                <div class="field field-full"><label for="profile-processes">対象プロセス</label><textarea id="profile-processes" rows="3" spellcheck="false" placeholder="例: chrome.exe&#10;1行に1件"></textarea><span class="fine">実行ファイル名を1行に1件入力します。</span></div>
+              </div>
+              <section class="profile-rules" aria-labelledby="profile-rules-title"><div class="section-heading"><div><h2 id="profile-rules-title">ショートカット</h2><p class="fine">トリガと動作を入力します。</p></div><button class="button button-secondary button-small" type="button" id="add-rule">追加</button></div><div id="rule-list"></div></section>
+              <div class="form-actions"><button class="button button-secondary button-small" type="submit" value="cancel">キャンセル</button><button class="button button-primary button-small" type="button" id="apply-profile">編集を適用</button></div>
+            </form>
+          </dialog>
         </main>
       </div>
     </div>

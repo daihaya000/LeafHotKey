@@ -16,12 +16,12 @@
     overview: { section: "概要", current: "常駐ステータス" },
     profiles: { section: "設定", current: "プロファイル" },
     safety: { section: "安全", current: "ゲーム保護" },
-    settings: { section: "システム", current: "設定 JSON" },
+    settings: { section: "システム", current: "基本設定" },
   };
 
   let settings = null;
   let revision = null;
-  let editingJson = false;
+  let editingProfileIndex = null;
   let lastStatus = null;
 
   function showAlert(message) {
@@ -144,13 +144,192 @@
       toggle.addEventListener("click", () => {
         profile.enabled = toggle.getAttribute("aria-checked") !== "true";
         setSwitch(toggle, profile.enabled);
-        syncJsonFromSettings();
+        markDirty();
         renderProfiles();
         renderOverview();
       });
-      row.append(icon, main, badge, toggle);
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "button button-secondary button-small";
+      edit.textContent = "編集";
+      edit.addEventListener("click", () => openProfileEditor((settings.profiles || []).indexOf(profile)));
+      row.append(icon, main, badge, toggle, edit);
     }
     return row;
+  }
+
+  function makeInput(label, id, value = "", type = "text") {
+    const field = document.createElement("label");
+    field.className = "field";
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    const input = document.createElement("input");
+    if (id) input.id = id;
+    input.type = type;
+    input.value = value;
+    field.append(caption, input);
+    return { field, input };
+  }
+
+  function renderRuleActionFields(rule, action) {
+    const fields = rule.querySelector(".rule-action-fields");
+    fields.textContent = "";
+    if (action === "send") {
+      const sequence = document.createElement("label");
+      sequence.className = "field field-full";
+      sequence.textContent = "送るキー列（1行に1操作）";
+      const input = document.createElement("textarea");
+      input.rows = 2;
+      input.dataset.ruleSequence = "";
+      input.value = rule.dataset.sequence || "";
+      sequence.append(input);
+      fields.append(sequence);
+      return;
+    }
+    if (action === "hold") {
+      const modifier = makeInput("維持するキー", "", rule.dataset.modifier || "");
+      modifier.input.dataset.ruleModifier = "";
+      const release = makeInput("解除するキー", "", rule.dataset.releaseOn || "");
+      release.input.dataset.ruleReleaseOn = "";
+      const blind = document.createElement("label");
+      blind.className = "check-field";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = rule.dataset.blind !== "false";
+      checkbox.dataset.ruleBlind = "";
+      blind.append(checkbox, document.createTextNode("他の修飾キーを維持する"));
+      fields.append(modifier.field, release.field, blind);
+    }
+  }
+
+  function renderRuleEditor(ruleData = {}) {
+    const rule = document.createElement("section");
+    rule.className = "rule-editor";
+    const trigger = ruleData.trigger || {};
+    const action = ruleData.action || { type: "send", sequence: [] };
+    rule.dataset.sequence = (action.sequence || []).join("\n");
+    rule.dataset.modifier = action.modifier || "";
+    rule.dataset.releaseOn = action.releaseOn || "";
+    rule.dataset.blind = action.blind === false ? "false" : "true";
+
+    const header = document.createElement("div");
+    header.className = "rule-header";
+    const title = document.createElement("strong");
+    title.textContent = "ショートカット";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "text-link rule-remove";
+    remove.textContent = "削除";
+    remove.addEventListener("click", () => rule.remove());
+    header.append(title, remove);
+
+    const grid = document.createElement("div");
+    grid.className = "rule-grid";
+    const key = makeInput("トリガキー", "", trigger.key || "");
+    key.input.required = true;
+    key.input.dataset.ruleKey = "";
+    const prefix = makeInput("前置キー", "", trigger.prefix || "");
+    prefix.input.dataset.rulePrefix = "";
+    const modifiers = makeInput("修飾キー", "", (trigger.modifiers || []).join(" + "));
+    modifiers.input.dataset.ruleModifiers = "";
+    modifiers.field.querySelector("input").placeholder = "Ctrl + Shift";
+    const actionType = document.createElement("label");
+    actionType.className = "field";
+    actionType.textContent = "動作";
+    const select = document.createElement("select");
+    select.dataset.ruleAction = "";
+    [["send", "キーを送る"], ["hold", "キーを維持"], ["passthrough", "元の入力を通す"]].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = action.type === value;
+      select.append(option);
+    });
+    actionType.append(select);
+
+    const flags = document.createElement("div");
+    flags.className = "rule-flags";
+    [["any", "修飾キーを問わない", trigger.anyModifier], ["pass", "元の入力も通す", trigger.passThroughNative]].forEach(([name, label, checked]) => {
+      const field = document.createElement("label");
+      field.className = "check-field";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = checked === true;
+      checkbox.dataset[name === "any" ? "ruleAnyModifier" : "rulePassThrough"] = "";
+      field.append(checkbox, document.createTextNode(label));
+      flags.append(field);
+    });
+
+    const actionFields = document.createElement("div");
+    actionFields.className = "rule-action-fields";
+    grid.append(key.field, prefix.field, modifiers.field, actionType, flags, actionFields);
+    rule.append(header, grid);
+    select.addEventListener("change", () => renderRuleActionFields(rule, select.value));
+    renderRuleActionFields(rule, action.type || "send");
+    return rule;
+  }
+
+  function openProfileEditor(index) {
+    if (!settings?.profiles?.[index]) return;
+    editingProfileIndex = index;
+    const profile = settings.profiles[index];
+    el("profile-dialog-title").textContent = `${profile.name || profile.id || "プロファイル"}を編集`;
+    el("profile-dialog-meta").textContent = `ID: ${profile.id || "-"}`;
+    el("profile-name").value = profile.name || "";
+    el("profile-processes").value = (profile.processNames || []).join("\n");
+    setSwitch(el("profile-enabled"), profile.enabled !== false);
+    const list = el("rule-list");
+    list.textContent = "";
+    (profile.rules || []).forEach((rule) => list.append(renderRuleEditor(rule)));
+    el("profile-dialog").showModal();
+  }
+
+  function readRuleEditors() {
+    return [...el("rule-list").querySelectorAll(".rule-editor")].map((row) => {
+      const get = (name) => row.querySelector(`[data-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}]`);
+      const key = get("ruleKey").value.trim();
+      const type = get("ruleAction").value;
+      if (!key) throw new Error("トリガキーを入力してください。");
+      const trigger = { key };
+      const prefix = get("rulePrefix").value.trim();
+      const modifiers = get("ruleModifiers").value.split(/[+,\s]+/).filter(Boolean);
+      if (prefix) trigger.prefix = prefix;
+      if (modifiers.length) trigger.modifiers = modifiers;
+      if (get("ruleAnyModifier").checked) trigger.anyModifier = true;
+      if (get("rulePassThrough").checked) trigger.passThroughNative = true;
+      const action = { type };
+      if (type === "send") {
+        action.sequence = lines(get("ruleSequence").value);
+        if (!action.sequence.length) throw new Error(`${key} に送るキー列を入力してください。`);
+      }
+      if (type === "hold") {
+        action.modifier = get("ruleModifier").value.trim();
+        action.releaseOn = get("ruleReleaseOn").value.trim();
+        action.blind = get("ruleBlind").checked;
+        if (!action.modifier || !action.releaseOn) throw new Error(`${key} の維持するキーと解除するキーを入力してください。`);
+      }
+      return { trigger, action };
+    });
+  }
+
+  function applyProfileEditor() {
+    if (editingProfileIndex === null || !settings?.profiles?.[editingProfileIndex]) return;
+    try {
+      const profile = settings.profiles[editingProfileIndex];
+      const name = el("profile-name").value.trim();
+      if (!name) throw new Error("表示名を入力してください。");
+      profile.name = name;
+      profile.enabled = el("profile-enabled").getAttribute("aria-checked") === "true";
+      profile.processNames = lines(el("profile-processes").value);
+      profile.rules = readRuleEditors();
+      el("profile-dialog").close();
+      markDirty();
+      renderProfiles();
+      renderOverview();
+      showAlert("");
+    } catch (error) {
+      showAlert(error.message || "プロファイルを更新できませんでした。");
+    }
   }
 
   function renderProfiles() {
@@ -266,23 +445,35 @@
     renderProcessList();
   }
 
+  function renderGeneralSettings() {
+    if (!settings) return;
+    const input = settings.input || {};
+    setSwitch(el("ime-disable"), input.imeDisableBeforeSend !== false);
+    el("send-delay").value = input.sendDelayMs ?? 2;
+    setSwitch(el("default-blind"), input.defaultBlind !== false);
+    el("settings-revision").textContent = revision || "-";
+  }
+
   function renderAll() {
     if (!settings) return;
-    if (!editingJson) el("json").value = JSON.stringify(settings, null, 2);
-    el("settings-revision").textContent = revision || "-";
+    renderGeneralSettings();
     renderSafety();
     renderProfiles();
     renderOverview();
   }
 
-  function syncJsonFromSettings() {
-    if (!settings) return;
-    if (!editingJson) el("json").value = JSON.stringify(settings, null, 2);
-    setSaveState("未保存の変更があります");
+  function markDirty() {
+    if (settings) setSaveState("未保存の変更があります");
   }
 
-  function syncJsonFromForm() {
+  function syncSettingsFromForms() {
     if (!settings) return;
+    if (!settings.input) settings.input = {};
+    const input = settings.input;
+    input.imeDisableBeforeSend = el("ime-disable").getAttribute("aria-checked") === "true";
+    input.sendDelayMs = Number(el("send-delay").value);
+    input.defaultBlind = el("default-blind").getAttribute("aria-checked") === "true";
+
     if (!settings.gameProtection) settings.gameProtection = {};
     const protection = settings.gameProtection;
     protection.enabled = el("protection-enabled").getAttribute("aria-checked") === "true";
@@ -290,7 +481,7 @@
     protection.resumeDelayMs = Number(el("resume-delay").value);
     protection.stopTriggerProcessNames = lines(el("stop-triggers").value);
     protection.resumeProcessNames = lines(el("resume-processes").value);
-    syncJsonFromSettings();
+    markDirty();
     renderProcessList();
     renderOverview();
     const summary = protection.enabled
@@ -310,12 +501,12 @@
     try {
       settings = JSON.parse(result.payload.json);
       revision = result.payload.revision;
-      editingJson = false;
+      editingProfileIndex = null;
       renderAll();
       showAlert("");
       setSaveState("保存済み", "ok");
     } catch (error) {
-      showAlert(`設定JSONを読み込めませんでした: ${error.message}`);
+      showAlert(`設定を読み込めませんでした: ${error.message}`);
       setSaveState("読み込み失敗", "error");
     }
   }
@@ -360,19 +551,8 @@
 
   async function save() {
     if (!settings) return;
-    let json = el("json").value;
-    if (!editingJson) {
-      syncJsonFromForm();
-      json = el("json").value;
-    }
-
-    try {
-      JSON.parse(json);
-    } catch (error) {
-      showAlert(`JSON として読めません: ${error.message}`);
-      setSaveState("保存していません", "error");
-      return;
-    }
+    syncSettingsFromForms();
+    const json = JSON.stringify(settings, null, 2);
 
     setSaveState("保存中…");
     const result = await api("/api/settings", {
@@ -424,19 +604,25 @@
     updateThemeIcon();
   }));
 
-  el("protection-enabled").addEventListener("click", () => {
-    const button = el("protection-enabled");
+  ["protection-enabled", "ime-disable", "default-blind"].forEach((id) => {
+    el(id).addEventListener("click", () => {
+      const button = el(id);
+      setSwitch(button, button.getAttribute("aria-checked") !== "true");
+      syncSettingsFromForms();
+    });
+  });
+  ["poll-interval", "resume-delay", "stop-triggers", "resume-processes", "send-delay"].forEach((id) => {
+    el(id).addEventListener("input", syncSettingsFromForms);
+    el(id).addEventListener("change", syncSettingsFromForms);
+  });
+  el("profile-enabled").addEventListener("click", () => {
+    const button = el("profile-enabled");
     setSwitch(button, button.getAttribute("aria-checked") !== "true");
-    syncJsonFromForm();
   });
-  ["poll-interval", "resume-delay", "stop-triggers", "resume-processes"].forEach((id) => {
-    el(id).addEventListener("input", syncJsonFromForm);
-    el(id).addEventListener("change", syncJsonFromForm);
-  });
-  el("json").addEventListener("input", () => {
-    editingJson = true;
-    setSaveState("JSON を直接編集しています");
-  });
+  el("add-rule").addEventListener("click", () => el("rule-list").append(renderRuleEditor()));
+  el("apply-profile").addEventListener("click", applyProfileEditor);
+  el("profile-dialog").addEventListener("close", () => { editingProfileIndex = null; });
+
   el("save").addEventListener("click", save);
   el("reload").addEventListener("click", () => { loadSettings(); loadStatus(); });
   el("restore").addEventListener("click", restore);
