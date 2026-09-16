@@ -12,3 +12,7 @@
 
 # PowerShell スクリプトは Windows PowerShell 5.1 での実行を前提に CRLF とする。
 *.ps1 text eol=crlf
+
+# バッチファイルは cmd.exe が ANSI(CP932) として読む。
+# 改行だけを CRLF に揃え、中身のバイトは変換しない。
+*.bat text eol=crlf

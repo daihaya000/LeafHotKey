@@ -36,6 +36,8 @@ powershell -NoProfile -File tests\Run-Checks.ps1 -Configuration Release
 3. `LeafHotKey.exe` を起動する。トレイに常駐する。
 4. ゲーム保護を使う場合は `LeafHotKeyWatcher.exe --run` を起動する。
 
+リポジト直下の `Start-LeafHotKey.bat` は 3 と 4 をまとめて行う。発行物があれば `publish\` を、無ければビルド出力を使う。既に動作中なら二重に起動しない。`LEAFHOTKEY_DRYRUN=1` を指定すると、使う exe のパスを表示するだけで起動しない。
+
 **AHK と LeafHotKey を同時に動かさない。** 同じキーを二重に処理して、意図しない入力になる。
 
 ### 自動起動について
