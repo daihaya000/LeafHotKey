@@ -51,6 +51,31 @@ public static class Program
         }
     }
 
+    /// <summary>
+    /// 本体の実行ファイルを探す。
+    /// 発行物は同じフォルダーに置かれるが、開発時は別プロジェクトのビルド出力にあるため、
+    /// どちらの配置でも復帰できるようにリポジトリ内も辿る。
+    /// </summary>
+    internal static string ResolveHostPath(string baseDirectory)
+    {
+        var local = Path.Combine(baseDirectory, "LeafHotKey.exe");
+        if (File.Exists(local)) return local;
+
+        var directory = new DirectoryInfo(baseDirectory);
+        while (directory is not null)
+        {
+            foreach (var configuration in new[] { "Release", "Debug" })
+            {
+                var candidate = Path.Combine(directory.FullName, "src", "LeafHotKey", "bin", configuration, "net8.0-windows", "LeafHotKey.exe");
+                if (File.Exists(candidate)) return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return local;
+    }
+
     /// <summary>本体を起動する。既に応答しているなら二重起動しない。</summary>
     private static int StartHost(string? hostPath)
     {
@@ -68,7 +93,7 @@ public static class Program
     /// </summary>
     internal static int LaunchHost(string? hostPath)
     {
-        var path = hostPath ?? Path.Combine(AppContext.BaseDirectory, "LeafHotKey.exe");
+        var path = hostPath ?? ResolveHostPath(AppContext.BaseDirectory);
         if (!File.Exists(path))
         {
             Console.Error.WriteLine($"本体が見つかりません: {path}");
@@ -121,7 +146,7 @@ public static class Program
             return ExitFailed;
         }
 
-        var hostPath = Path.Combine(AppContext.BaseDirectory, "LeafHotKey.exe");
+        var hostPath = ResolveHostPath(AppContext.BaseDirectory);
         var controller = new LifecycleController(settings, new GameMonitor(), new HostControl(hostPath));
 
         using var stop = new CancellationTokenSource();

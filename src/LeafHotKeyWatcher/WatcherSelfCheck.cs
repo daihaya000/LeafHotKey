@@ -175,6 +175,31 @@ public static class WatcherSelfCheck
 
         Check("settings.invalid", rejected, "保護有効なのに停止対象が空の設定を拒否する");
 
+        // 本体の場所は、発行物（同じフォルダー）と開発時のビルド出力の両方を解決する。
+        var probeRoot = Path.Combine(Path.GetTempPath(), "leafhotkey-watcher-probe-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var publishedDirectory = Path.Combine(probeRoot, "published");
+            Directory.CreateDirectory(publishedDirectory);
+            var publishedHost = Path.Combine(publishedDirectory, "LeafHotKey.exe");
+            File.WriteAllText(publishedHost, string.Empty);
+            Check("hostpath.published", Program.ResolveHostPath(publishedDirectory) == publishedHost, "同じフォルダーに本体があればそれを選ぶ");
+
+            var devDirectory = Path.Combine(probeRoot, "src", "LeafHotKeyWatcher", "bin", "Release", "net8.0-windows");
+            var devHost = Path.Combine(probeRoot, "src", "LeafHotKey", "bin", "Release", "net8.0-windows", "LeafHotKey.exe");
+            Directory.CreateDirectory(devDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(devHost)!);
+            File.WriteAllText(devHost, string.Empty);
+            Check("hostpath.development", Program.ResolveHostPath(devDirectory) == devHost, "開発時のビルド出力から本体を解決する");
+        }
+        finally
+        {
+            Directory.Delete(probeRoot, recursive: true);
+        }
+
+        var resolvedHost = Program.ResolveHostPath(AppContext.BaseDirectory);
+        Check("hostpath.deployment", File.Exists(resolvedHost), $"現在の配置で本体を解決できる（{resolvedHost}）");
+
         Console.WriteLine($"failures={failures}");
         return failures == 0 ? 0 : 1;
     }
