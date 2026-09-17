@@ -373,6 +373,25 @@
       .settings-row-main label, .settings-row-main strong { display: block; font-size: 14px; font-weight: 600; }
       .settings-row-main p { margin: 3px 0 0; color: var(--label-secondary); font-size: 12px; }
 
+      .profile-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px 16px; }
+      .profile-search { position: relative; min-width: 0; flex: 1; max-width: 420px; }
+      .profile-search svg { position: absolute; top: 50%; left: 12px; width: 16px; height: 16px; color: var(--label-tertiary); transform: translateY(-50%); }
+      .profile-search input { width: 100%; min-height: 40px; padding: 8px 12px 8px 38px; border: 1px solid var(--separator); border-radius: 10px; background: var(--surface-secondary); color: var(--label); font-size: 13px; }
+      .profile-search input::placeholder { color: var(--label-tertiary); }
+      .profile-table { overflow: hidden; border-top: 1px solid var(--separator); }
+      .profile-table-header, .profile-row { display: grid; grid-template-columns: minmax(185px, 1.1fr) minmax(160px, 1fr) 76px 136px 58px; align-items: center; gap: 16px; padding: 12px 24px; }
+      .profile-table-header { min-height: 40px; background: var(--surface-secondary); color: var(--label-secondary); font-size: 11px; font-weight: 650; letter-spacing: 0.04em; }
+      .profile-row { min-height: 76px; border-top: 1px solid var(--separator); }
+      .profile-row:hover { background: var(--surface-secondary); }
+      .profile-identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
+      .profile-identity > div:last-child { min-width: 0; }
+      .profile-identity strong { display: block; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+      .profile-id { display: block; overflow: hidden; margin-top: 3px; color: var(--label-tertiary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+      .profile-processes { overflow: hidden; color: var(--label-secondary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+      .profile-rule-count { color: var(--label-secondary); font-size: 12px; white-space: nowrap; }
+      .profile-state { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .profile-row > .button { justify-self: end; }
+
       .switch {
         position: relative;
         width: 48px;
@@ -485,6 +504,15 @@
         .process-row .badge { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
         .card-header, .card-body { padding-right: 16px; padding-left: 16px; }
         .list-row { padding-right: 16px; padding-left: 16px; }
+        .profile-toolbar { align-items: stretch; flex-direction: column; padding: 16px; }
+        .profile-search { max-width: none; width: 100%; }
+        .profile-table-header { display: none; }
+        .profile-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px 16px; }
+        .profile-identity { grid-column: 1; }
+        .profile-processes { grid-column: 1; grid-row: 2; }
+        .profile-rule-count { grid-column: 2; grid-row: 2; }
+        .profile-state { grid-column: 1; grid-row: 3; justify-content: flex-start; }
+        .profile-row > .button { grid-column: 2; grid-row: 3; }
         .section-heading { margin-top: 24px; }
       }
 

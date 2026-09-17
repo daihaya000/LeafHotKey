@@ -105,56 +105,72 @@
 
   function makeProfileRow(profile, compact) {
     const row = document.createElement("div");
-    row.className = compact ? "list-row" : "settings-row";
+    row.className = compact ? "list-row" : "profile-row";
 
     const icon = document.createElement("div");
     icon.className = "app-icon";
     icon.setAttribute("aria-hidden", "true");
     icon.textContent = profileInitials(profile);
 
-    const main = document.createElement("div");
-    main.className = compact ? "list-primary" : "settings-row-main";
-    const name = document.createElement(compact ? "strong" : "strong");
+    const name = document.createElement("strong");
     name.textContent = profile.name || profile.id || "名称未設定";
-    const meta = document.createElement("span");
-    meta.textContent = profileMeta(profile);
-    if (compact) main.append(name, meta);
-    else {
-      const detail = document.createElement("p");
-      detail.textContent = profileMeta(profile);
-      main.append(name, detail);
-    }
-
     const badge = document.createElement("span");
     badge.className = "badge " + (profile.enabled === false ? "" : "badge-success");
     badge.textContent = profileStatus(profile);
 
     if (compact) {
+      const main = document.createElement("div");
+      main.className = "list-primary";
+      const meta = document.createElement("span");
+      meta.textContent = profileMeta(profile);
+      main.append(name, meta);
       const side = document.createElement("div");
       side.className = "list-side";
       side.append(badge);
       row.append(icon, main, side);
-    } else {
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "switch";
-      toggle.setAttribute("role", "switch");
-      toggle.setAttribute("aria-label", `${profile.name || profile.id || "プロファイル"}を有効にする`);
-      setSwitch(toggle, profile.enabled !== false);
-      toggle.addEventListener("click", () => {
-        profile.enabled = toggle.getAttribute("aria-checked") !== "true";
-        setSwitch(toggle, profile.enabled);
-        markDirty();
-        renderProfiles();
-        renderOverview();
-      });
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "button button-secondary button-small";
-      edit.textContent = "編集";
-      edit.addEventListener("click", () => openProfileEditor((settings.profiles || []).indexOf(profile)));
-      row.append(icon, main, badge, toggle, edit);
+      return row;
     }
+
+    const identity = document.createElement("div");
+    identity.className = "profile-identity";
+    const identityText = document.createElement("div");
+    const id = document.createElement("span");
+    id.className = "profile-id";
+    id.textContent = profile.id || "-";
+    identityText.append(name, id);
+    identity.append(icon, identityText);
+
+    const processes = document.createElement("span");
+    processes.className = "profile-processes";
+    processes.textContent = (profile.processNames || []).join(" / ") || "実行ファイル未指定";
+
+    const rules = document.createElement("span");
+    rules.className = "profile-rule-count";
+    rules.textContent = `${(profile.rules || []).length} ルール`;
+
+    const state = document.createElement("div");
+    state.className = "profile-state";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "switch";
+    toggle.setAttribute("role", "switch");
+    toggle.setAttribute("aria-label", `${profile.name || profile.id || "プロファイル"}を有効にする`);
+    setSwitch(toggle, profile.enabled !== false);
+    toggle.addEventListener("click", () => {
+      profile.enabled = toggle.getAttribute("aria-checked") !== "true";
+      setSwitch(toggle, profile.enabled);
+      markDirty();
+      renderProfiles();
+      renderOverview();
+    });
+    state.append(badge, toggle);
+
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "button button-secondary button-small";
+    edit.textContent = "編集";
+    edit.addEventListener("click", () => openProfileEditor((settings.profiles || []).indexOf(profile)));
+    row.append(identity, processes, rules, state, edit);
     return row;
   }
 
@@ -337,23 +353,31 @@
     const profiles = settings.profiles || [];
     const enabled = profiles.filter((profile) => profile.enabled !== false).length;
     const countText = `${profiles.length}件のプロファイル · 有効 ${enabled}件`;
+    const query = el("profile-search").value.trim().toLocaleLowerCase();
+    const visible = profiles.filter((profile) => {
+      const haystack = [profile.name, profile.id, ...(profile.processNames || [])].join(" ").toLocaleLowerCase();
+      return !query || haystack.includes(query);
+    });
 
     el("nav-profile-count").textContent = String(profiles.length);
     el("profile-count-label").textContent = countText;
+    el("profile-results").textContent = query ? `${visible.length} / ${profiles.length} 件を表示` : `${profiles.length} 件を表示`;
 
     const list = el("profile-list");
     list.textContent = "";
-    profiles.forEach((profile) => list.append(makeProfileRow(profile, false)));
-    el("profile-empty").hidden = profiles.length !== 0;
+    visible.forEach((profile) => list.append(makeProfileRow(profile, false)));
+    const empty = el("profile-empty");
+    empty.hidden = visible.length !== 0;
+    empty.querySelector("p").textContent = profiles.length === 0 ? "プロファイルがありません。" : "一致するプロファイルがありません。";
 
     const overview = el("overview-profiles");
     overview.textContent = "";
     profiles.slice(0, 4).forEach((profile) => overview.append(makeProfileRow(profile, true)));
     if (profiles.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      empty.textContent = "プロファイルがありません。";
-      overview.append(empty);
+      const emptyOverview = document.createElement("div");
+      emptyOverview.className = "empty-state";
+      emptyOverview.textContent = "プロファイルがありません。";
+      overview.append(emptyOverview);
     }
   }
 
@@ -598,6 +622,7 @@
   }
 
   navItems.forEach((item) => item.addEventListener("click", () => showView(item.dataset.viewTarget)));
+  el("profile-search").addEventListener("input", renderProfiles);
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => button.addEventListener("click", () => {
     root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
     try { localStorage.setItem("leafhotkey.theme", root.dataset.theme); } catch (_) { /* 保存できないブラウザもある */ }
