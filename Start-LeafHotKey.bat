@@ -73,6 +73,11 @@ if defined NEED_BUILD (
 )
 
 if defined HOST_RUNNING (
+    rem Start the watcher when only the host is running, so protection is not lost.
+    if not defined WATCHER_RUNNING if defined WATCHER (
+        echo Starting LeafHotKeyWatcher...
+        start "" /min "!WATCHER!" --run
+    )
     echo LeafHotKey is already running.
     exit /b 0
 )
