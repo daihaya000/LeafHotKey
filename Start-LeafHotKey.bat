@@ -43,8 +43,8 @@ if defined HEAD (
     if errorlevel 1 set "NEED_BUILD=1"
 )
 if not defined HEAD (
-    echo Git repository was not found. Cannot determine the latest commit.
-    exit /b 1
+    rem Without git, the commit check is skipped and the existing build is started.
+    echo Git was not found. Starting the existing build without the commit check.
 )
 
 set "HOST_RUNNING="
