@@ -42,6 +42,10 @@ if defined HEAD (
     git -C "%REPO%" diff --cached --quiet -- .
     if errorlevel 1 set "NEED_BUILD=1"
 )
+if not defined HEAD (
+    echo Git repository was not found. Cannot determine the latest commit.
+    exit /b 1
+)
 
 set "HOST_RUNNING="
 if defined HOST (
@@ -66,6 +70,11 @@ if defined NEED_BUILD (
     call :wait_for_stopped
     if errorlevel 1 exit /b 1
     goto build
+)
+
+if defined HOST_RUNNING (
+    echo LeafHotKey is already running.
+    exit /b 0
 )
 
 goto select
