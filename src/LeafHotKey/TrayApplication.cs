@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace LeafHotKey;
@@ -30,8 +31,11 @@ public sealed class TrayApplication : ApplicationContext
         {
             Enabled = _settingsUrl is not null,
         };
+        var versionItem = new ToolStripMenuItem(ReadCommitLabel()) { Enabled = false };
 
         var menu = new ContextMenuStrip();
+        menu.Items.Add(versionItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(settingsItem);
         menu.Items.Add(restartItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -69,6 +73,18 @@ public sealed class TrayApplication : ApplicationContext
         {
             // 既定のブラウザが無い環境では何もしない。
         }
+    }
+
+    private static string ReadCommitLabel()
+    {
+        var version = typeof(TrayApplication).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+        var separator = version?.IndexOf('+') ?? -1;
+        if (separator < 0 || separator == version!.Length - 1) return "Commit: unknown";
+
+        var commit = version[(separator + 1)..];
+        return $"Commit: {commit[..Math.Min(7, commit.Length)]}";
     }
 
     private static Icon LoadTrayIcon()
