@@ -105,6 +105,15 @@ public sealed class InputEngineCore
             if (IsPrefixKey(profile, key))
             {
                 _heldPrefixes[key] = false;
+
+                // 前置キー自身が Hold の割り当てを持つ場合は、押下中から保持する。
+                // 離上時まで遅延すると、F16 -> Space が一瞬のタップになってしまう。
+                if (exact.Kind == HotkeyActionKind.Hold)
+                {
+                    var holdDecision = Execute(exact, key, firedOnKeyUp: false);
+                    return HasPassthrough(profile, key) ? InputDecision.PassThrough : holdDecision;
+                }
+
                 return HasPassthrough(profile, key) ? InputDecision.PassThrough : InputDecision.Suppress;
             }
 
@@ -138,7 +147,10 @@ public sealed class InputEngineCore
             }
 
             _activeHolds.Remove(key);
-            decision = InputDecision.Suppress;
+            decision = HasPassthrough(profile, key) ? decision : InputDecision.Suppress;
+
+            // Hold の前置キーは押下時に発火済み。単体ルールをもう一度実行しない。
+            if (_heldPrefixes.Remove(key)) return decision;
         }
 
         if (!_heldPrefixes.TryGetValue(key, out var consumed)) return decision;

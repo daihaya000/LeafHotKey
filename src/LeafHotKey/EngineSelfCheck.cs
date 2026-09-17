@@ -142,16 +142,29 @@ public static class EngineSelfCheck
         Check("prefix.hold.release", sink.Sent.Count == 1 && sink.Sent[0] == "{Ctrl} up", "f13 を離すと Ctrl を解放する");
         engine.OnKeyUp("MButton", SendModifiers.None);
 
-        // f16 も前置キーとして使う（f16 & Home → !]）。
+        // f16 単体は Space を保持し、組み合わせ（f16 & Home）では Alt+] を送る。
         sink.Sent.Clear();
         var f16Down = engine.OnKeyDown("f16", SendModifiers.None);
+        Check(
+            "prefix.f16.hold.down",
+            f16Down == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "{Space} down",
+            $"f16 押下で Space を保持する（実際: {string.Join(" / ", sink.Sent)}）");
+        sink.Sent.Clear();
+        var f16Up = engine.OnKeyUp("f16", SendModifiers.None);
+        Check(
+            "prefix.f16.hold.up",
+            f16Up == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "{Space} up",
+            $"f16 解放で Space を解放する（実際: {string.Join(" / ", sink.Sent)}）");
+
+        sink.Sent.Clear();
+        f16Down = engine.OnKeyDown("f16", SendModifiers.None);
         Check("prefix.f16", f16Down == InputDecision.PassThrough, "*~f16 があるため f16 の元入力は通す");
         sink.Sent.Clear();
         engine.OnKeyDown("Home", SendModifiers.None);
         Check("prefix.f16.combo", sink.Sent.Count == 1 && sink.Sent[0] == "Alt+]", $"f16 & Home は Alt+] を送る（実際: {string.Join(" / ", sink.Sent)}）");
         sink.Sent.Clear();
-        engine.OnKeyUp("f16", SendModifiers.None);
-        Check("prefix.f16.up", sink.Sent.Count == 0, "組み合わせ済みの f16 解放では単体動作を出さない");
+        f16Up = engine.OnKeyUp("f16", SendModifiers.None);
+        Check("prefix.f16.up", f16Up == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "{Space} up", "組み合わせ済みの f16 解放で Space を解放する");
 
         // 割り当ての無いキーは触らない。
         sink.Sent.Clear();

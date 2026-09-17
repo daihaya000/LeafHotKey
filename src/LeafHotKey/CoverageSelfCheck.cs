@@ -70,7 +70,7 @@ public static class CoverageSelfCheck
                     suppressed = down == InputDecision.Suppress || up == InputDecision.Suppress;
                 }
 
-                var expected = Expected(rule);
+                var expected = Expected(profile, rule);
                 var actual = sink.Sent.ToList();
 
                 // *~key が定義されたキーは、元の入力を通すのが正しい挙動。
@@ -103,22 +103,32 @@ public static class CoverageSelfCheck
     }
 
     /// <summary>ルールの宣言から期待される送信内容を組み立てる。</summary>
-    private static IReadOnlyList<string> Expected(HotkeyRule rule)
+    private static IReadOnlyList<string> Expected(HotkeyProfile profile, HotkeyRule rule)
     {
-        if (rule.Kind == HotkeyActionKind.Send)
+        var expected = rule.Kind switch
         {
-            return rule.Sequences
+            HotkeyActionKind.Send => rule.Sequences
                 .Select(sequence => string.Join(" ", sequence.Select(token => token.ToString())))
-                .ToList();
-        }
+                .ToList(),
+            HotkeyActionKind.Hold when rule.HoldModifier is { } modifier
+                => new[] { $"{{{modifier}}} down", $"{{{modifier}}} up" }.ToList(),
+            _ => new List<string>(),
+        };
 
-        if (rule.Kind == HotkeyActionKind.Hold && rule.HoldModifier is { } modifier)
-        {
-            // 押下で保持し、解除キーを離した時点で解放する。
-            return new[] { $"{{{modifier}}} down", $"{{{modifier}}} up" };
-        }
+        if (rule.Trigger.Prefix is not { } prefix) return expected;
 
-        return Array.Empty<string>();
+        // Hold を持つ前置キーは、組み合わせ入力中も押下状態を維持する。
+        var prefixHold = profile.Rules.FirstOrDefault(candidate =>
+            candidate.Trigger.Prefix is null &&
+            string.Equals(candidate.Trigger.Key, prefix, StringComparison.OrdinalIgnoreCase) &&
+            candidate.Kind == HotkeyActionKind.Hold &&
+            string.Equals(candidate.ReleaseOn, prefix, StringComparison.OrdinalIgnoreCase));
+        if (prefixHold?.HoldModifier is not { } prefixModifier) return expected;
+
+        return new[] { $"{{{prefixModifier}}} down" }
+            .Concat(expected)
+            .Append($"{{{prefixModifier}}} up")
+            .ToList();
     }
 
     private static string Describe(HotkeyTrigger trigger)
