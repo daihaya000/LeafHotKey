@@ -33,7 +33,17 @@ public static class CoverageSelfCheck
             return 1;
         }
 
-        var profiles = HotkeyProfileLoader.Load(settings);
+        IReadOnlyList<HotkeyProfile> profiles;
+        try
+        {
+            profiles = HotkeyProfileLoader.Load(settings);
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidDataException or FormatException or IOException)
+        {
+            File.AppendAllText(path, $"FAIL settings: 設定を読み込めない（{ex.Message}）{Environment.NewLine}failures=1{Environment.NewLine}", encoding);
+            return 1;
+        }
+
         var sink = new RecordingSink();
         var engine = new InputEngineCore(sink);
 

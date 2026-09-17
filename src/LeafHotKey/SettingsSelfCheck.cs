@@ -91,6 +91,28 @@ public static class SettingsSelfCheck
 
             Check("invalid.unchanged", store.Load().GameProtection.PollIntervalMs == 750, "拒否された保存は反映されない");
 
+            // 正本が壊れても起動できるよう、バックアップ → 既定設定の順で復旧する。
+            // バックアップ側に識別可能な内容（pollIntervalMs=321）を残してから正本を壊す。
+            var marker = store.Load().Json.Replace("\"pollIntervalMs\": 750", "\"pollIntervalMs\": 321", StringComparison.Ordinal);
+            Check("recover.marker", store.Save(marker, store.Load().Revision).Success, "復旧検証用の内容を用意できる");
+
+            File.WriteAllText(settingsPath, "{ \"profiles\": [", encoding);
+            var fromBackup = store.Load();
+            Check("recover.backup", fromBackup.GameProtection.PollIntervalMs == 750, $"壊れた正本はバックアップから復旧する（pollIntervalMs={fromBackup.GameProtection.PollIntervalMs}）");
+            Check("recover.backup.file", File.ReadAllText(settingsPath, encoding) == fromBackup.Json, "復旧内容を正本へ書き戻す");
+
+            File.WriteAllText(settingsPath, "not json", encoding);
+            File.WriteAllText(store.BackupPath, "not json", encoding);
+            var fromDefaults = store.Load();
+            Check(
+                "recover.defaults",
+                fromDefaults.GameProtection.PollIntervalMs == 1000 && fromDefaults.Profiles.Count == 13,
+                $"バックアップも壊れている場合は既定設定で復旧する（profiles={fromDefaults.Profiles.Count}）");
+            Check("recover.defaults.file", File.ReadAllText(settingsPath, encoding) == fromDefaults.Json, "復旧内容を正本へ書き戻す");
+
+            var afterRecovery = fromDefaults.Json.Replace("\"pollIntervalMs\": 1000", "\"pollIntervalMs\": 500", StringComparison.Ordinal);
+            Check("recover.save", store.Save(afterRecovery, fromDefaults.Revision).Success, "復旧後は正本と版が一致して保存できる");
+
             // 既定へ戻す。
             var restored = store.RestoreDefaults();
             Check("restore.ok", restored.Success, "既定設定へ戻せる");

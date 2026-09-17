@@ -81,16 +81,26 @@ public static class Program
             // 設定の正本はユーザーごとの保存先。無ければ既定設定から作る。
             var defaultsPath = FindDefaultSettings();
             var store = defaultsPath is null ? null : new SettingsStore(SettingsStore.DefaultSettingsPath, defaultsPath);
-            var profiles = store is null
-                ? Array.Empty<HotkeyProfile>()
-                : store.Load().Profiles.ToArray();
+
+            // 設定を読めない場合でもトレイは起動させる（無言で終了しない）。
+            HotkeyProfile[] profiles;
+            var settingsLoaded = true;
+            try
+            {
+                profiles = store is null ? Array.Empty<HotkeyProfile>() : store.Load().Profiles.ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException or FormatException)
+            {
+                profiles = Array.Empty<HotkeyProfile>();
+                settingsLoaded = false;
+            }
 
             using (var engine = new InputEngine(profiles))
             {
                 var engineStarted = engine.Start();
 
                 // フックを設置できなかった場合は動作中として扱わない。
-                if (!engineStarted) state.Pause();
+                if (!engineStarted || !settingsLoaded) state.Pause();
                 state.StateChanged += next => engine.Enabled = next == RuntimeState.Running;
 
                 SettingsServer? web = null;

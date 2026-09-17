@@ -87,8 +87,30 @@ public sealed class SettingsStore
         lock (_gate)
         {
             EnsureExists();
-            var json = ReadText(SettingsPath);
+
+            if (TryParse(ReadText(SettingsPath)) is { } current) return current;
+
+            // 壊れた内容でも起動できるよう、バックアップ → 既定設定の順で復旧する。
+            // 復旧内容は正本へ書き戻し、壊れていた内容はバックアップ側へ退避する。
+            var recovered = TryParse(File.Exists(BackupPath) ? ReadText(BackupPath) : string.Empty)
+                ?? TryParse(ReadText(_defaultsPath));
+            if (recovered is null) throw new InvalidDataException($"設定を読み込めません: {SettingsPath}");
+
+            WriteAtomic(recovered.Json);
+            return recovered;
+        }
+    }
+
+    /// <summary>内容が設定として成立すればスナップショットを返す。壊れている場合は null。</summary>
+    private SettingsSnapshot? TryParse(string json)
+    {
+        try
+        {
             return Parse(json);
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidDataException or FormatException)
+        {
+            return null;
         }
     }
 

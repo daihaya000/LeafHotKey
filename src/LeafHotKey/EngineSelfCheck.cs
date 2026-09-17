@@ -42,7 +42,18 @@ public static class EngineSelfCheck
             return 1;
         }
 
-        var profiles = HotkeyProfileLoader.Load(settings);
+        IReadOnlyList<HotkeyProfile> profiles;
+        try
+        {
+            profiles = HotkeyProfileLoader.Load(settings);
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidDataException or FormatException or IOException)
+        {
+            Check("settings.readable", false, $"設定を読み込めない（{ex.Message}）");
+            File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);
+            return 1;
+        }
+
         var clipStudio = profiles.Single(profile => profile.Id == "clipstudio");
         var explorer = profiles.Single(profile => profile.Id == "explorer");
         var photoshop = profiles.Single(profile => profile.Id == "photoshop");
