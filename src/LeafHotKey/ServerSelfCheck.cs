@@ -164,6 +164,31 @@ public static class ServerSelfCheck
                 var iconAnonymous = Send(server.Port, "GET", "/api/icon?name=LeafHotKey.exe", host, origin, token: null);
                 Check("icon.unauthorized", iconAnonymous.Status == 401, "トークンなしのアイコン取得は 401");
 
+                // 安定 URL: 保存したトークンと固定ポートを使い回す。
+                var identityDirectory = Path.Combine(Path.GetTempPath(), "leafhotkey-webui-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var identityPath = Path.Combine(identityDirectory, "webui.token");
+                    var firstToken = WebUiIdentity.LoadOrCreate(identityPath);
+                    var secondToken = WebUiIdentity.LoadOrCreate(identityPath);
+                    Check(
+                        "webui.token.stable",
+                        firstToken == secondToken && firstToken.Length >= 32 && File.Exists(identityPath),
+                        "再起動しても同じトークンを使う");
+                    Check(
+                        "webui.token.saved",
+                        File.ReadAllText(identityPath, encoding).Trim() == firstToken,
+                        "トークンを保存先から読み直せる");
+                    Check(
+                        "webui.port.fixed",
+                        WebUiIdentity.DefaultPort == 17832,
+                        $"固定ポート {WebUiIdentity.DefaultPort} で待ち受ける（使用中は空きポートへ退避）");
+                }
+                finally
+                {
+                    Directory.Delete(identityDirectory, recursive: true);
+                }
+
                 var snapshot2 = store2.Load();
                 var body2 = JsonSerializer.Serialize(new
                 {

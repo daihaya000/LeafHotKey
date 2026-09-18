@@ -31,14 +31,15 @@ public sealed class SettingsServer : IDisposable
         int port = 0,
         Func<string>? statusJson = null,
         string? webRoot = null,
-        Action<SettingsSnapshot>? onSaved = null)
+        Action<SettingsSnapshot>? onSaved = null,
+        string? token = null)
     {
         _store = store;
         _statusJson = statusJson;
         _webRoot = webRoot;
         _onSaved = onSaved;
         _listener = new TcpListener(IPAddress.Loopback, port);
-        Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+        Token = token ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .Replace('+', '-')
             .Replace('/', '_')
             .TrimEnd('=');
@@ -157,7 +158,7 @@ public sealed class SettingsServer : IDisposable
         if (RequiresAuth(request) && !IsAuthorized(request))
         {
             var message = request.Method == "GET" && (request.Path == "/" || request.Path == "/index.html")
-                ? "認証情報がないか、期限が切れています。\nタスクトレイの LeafHotKey を右クリックし「設定を開く」から開き直してください。\n再起動前のタブやURLは使えません。"
+                ? "認証情報がないか、期限が切れています。\nタスクトレイの LeafHotKey を右クリックし「設定を開く」から開き直してください。"
                 : "unauthorized";
             await WriteAsync(stream, 401, "text/plain; charset=utf-8", message).ConfigureAwait(false);
             return;

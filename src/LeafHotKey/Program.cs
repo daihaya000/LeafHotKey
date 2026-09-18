@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using System.Windows.Forms;
 
 namespace LeafHotKey;
@@ -108,12 +109,33 @@ public static class Program
                 {
                     if (store is not null)
                     {
+                        // URL を起動ごとに変えないよう、固定ポートと保存したトークンを使う。
+                        var token = WebUiIdentity.LoadOrCreate(WebUiIdentity.TokenPath);
+                        var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
                         web = new SettingsServer(
                             store,
+                            WebUiIdentity.DefaultPort,
                             statusJson: () => StatusJson(state, engine),
-                            webRoot: Path.Combine(AppContext.BaseDirectory, "wwwroot"),
-                            onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles));
-                        web.Start();
+                            webRoot: webRoot,
+                            onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles),
+                            token: token);
+                        try
+                        {
+                            web.Start();
+                        }
+                        catch (SocketException)
+                        {
+                            // 固定ポートが他のアプリに使われている場合だけ空きポートへ退避する。
+                            web.Dispose();
+                            web = new SettingsServer(
+                                store,
+                                port: 0,
+                                statusJson: () => StatusJson(state, engine),
+                                webRoot: webRoot,
+                                onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles),
+                                token: token);
+                            web.Start();
+                        }
                     }
 
                     ApplicationConfiguration.Initialize();
