@@ -42,14 +42,14 @@ public static class ServerSelfCheck
             server.Start();
 
             Check("start.loopback", server.Port > 0, $"127.0.0.1:{server.Port} で待ち受ける");
-            Check("start.token", server.Token.Length >= 32 && server.Url.Contains(server.Token, StringComparison.Ordinal), "起動ごとのトークンを発行する");
+            Check("start.url", server.Url == $"http://127.0.0.1:{server.Port}/", $"トークンを含まない固定 URL を返す（{server.Url}）");
 
             var host = $"127.0.0.1:{server.Port}";
             var origin = $"http://{host}";
 
-            // 認証あり。
-            var settings = Send(server.Port, "GET", "/api/settings", host, origin, server.Token);
-            Check("auth.ok", settings.Status == 200, $"トークン付きの取得は成功する（{settings.Status}）");
+            // トークンなしで取得できる（待受は 127.0.0.1 のみで、Host / Origin は検証する）。
+            var settings = Send(server.Port, "GET", "/api/settings", host, origin);
+            Check("api.get", settings.Status == 200, $"設定を取得できる（{settings.Status}）");
 
             var snapshot = store.Load();
             Check(
@@ -57,51 +57,46 @@ public static class ServerSelfCheck
                 settings.Body.Contains(snapshot.Revision, StringComparison.Ordinal),
                 "現在の版を返す");
 
-            // 認証なし・誤りは拒否。
-            Check("auth.missing", Send(server.Port, "GET", "/api/settings", host, origin, token: null).Status == 401, "トークンなしは 401");
-            Check("auth.wrong", Send(server.Port, "GET", "/api/settings", host, origin, "not-the-token").Status == 401, "誤ったトークンは 401");
-
-            // Host / Origin の検証。
-            Check("host.mismatch", Send(server.Port, "GET", "/api/settings", "evil.example", origin, server.Token).Status == 403, "Host 不一致は 403");
-            Check("origin.mismatch", Send(server.Port, "GET", "/api/settings", host, "http://evil.example", server.Token).Status == 403, "別オリジンは 403");
-            Check("origin.absent", Send(server.Port, "GET", "/api/settings", host, origin: null, server.Token).Status == 200, "Origin なし（同一オリジンの通常要求）は通す");
+            // Host / Origin の検証（トークンに代わる防御）。
+            Check("host.mismatch", Send(server.Port, "GET", "/api/settings", "evil.example", origin).Status == 403, "Host 不一致は 403");
+            Check("origin.mismatch", Send(server.Port, "GET", "/api/settings", host, "http://evil.example").Status == 403, "別オリジンは 403");
+            Check("origin.absent", Send(server.Port, "GET", "/api/settings", host, origin: null).Status == 200, "Origin なし（同一オリジンの通常要求）は通す");
 
             // 保存。
             var updated = snapshot.Json.Replace("\"pollIntervalMs\": 1000", "\"pollIntervalMs\": 800", StringComparison.Ordinal);
             var saveBody = JsonSerializer.Serialize(new { revision = snapshot.Revision, json = updated });
-            var save = Send(server.Port, "POST", "/api/settings", host, origin, server.Token, saveBody);
+            var save = Send(server.Port, "POST", "/api/settings", host, origin, saveBody);
             Check("save.ok", save.Status == 200, $"正しい保存は 200（{save.Status}）");
             Check("save.applied", store.Load().GameProtection.PollIntervalMs == 800, "保存内容が設定へ反映される");
 
             // 競合・不正。
-            var conflict = Send(server.Port, "POST", "/api/settings", host, origin, server.Token, saveBody);
+            var conflict = Send(server.Port, "POST", "/api/settings", host, origin, saveBody);
             Check("save.conflict", conflict.Status == 409, $"古い版の保存は 409（{conflict.Status}）");
 
             var invalidBody = JsonSerializer.Serialize(new { revision = store.Load().Revision, json = "{ broken" });
-            Check("save.invalid", Send(server.Port, "POST", "/api/settings", host, origin, server.Token, invalidBody).Status == 400, "壊れた設定は 400");
+            Check("save.invalid", Send(server.Port, "POST", "/api/settings", host, origin, invalidBody).Status == 400, "壊れた設定は 400");
 
-            var missingField = Send(server.Port, "POST", "/api/settings", host, origin, server.Token, "{}");
+            var missingField = Send(server.Port, "POST", "/api/settings", host, origin, "{}");
             Check("save.missing-field", missingField.Status == 400, "json フィールドなしは 400");
 
             // 本文サイズの上限。
-            var oversized = Send(server.Port, "POST", "/api/settings", host, origin, server.Token, new string('a', SettingsServer.MaxBodyBytes + 10));
+            var oversized = Send(server.Port, "POST", "/api/settings", host, origin, new string('a', SettingsServer.MaxBodyBytes + 10));
             Check("body.too-large", oversized.Status == 413, $"上限を超える本文は 413（{oversized.Status}）");
 
             // 既定へ戻す。
-            var restore = Send(server.Port, "POST", "/api/settings/restore", host, origin, server.Token, "{}");
+            var restore = Send(server.Port, "POST", "/api/settings/restore", host, origin, "{}");
             Check("restore.ok", restore.Status == 200, "既定復帰は 200");
             Check("restore.applied", store.Load().GameProtection.PollIntervalMs == 1000, "既定値へ戻る");
 
             // 状態取得と未知のパス。
-            Check("status.ok", Send(server.Port, "GET", "/api/status", host, origin, server.Token).Body.Contains("running", StringComparison.Ordinal), "状態を返す");
-            Check("unknown.path", Send(server.Port, "GET", "/api/secret", host, origin, server.Token).Status == 404, "未知のパスは 404");
-            Check("traversal", Send(server.Port, "GET", "/../settings.json", host, origin, server.Token).Status == 404, "パス探索を拒否する");
-            Check("static.missing", Send(server.Port, "GET", "/", host, origin, server.Token).Status == 404, "index.html が無ければ 404");
+            Check("status.ok", Send(server.Port, "GET", "/api/status", host, origin).Body.Contains("running", StringComparison.Ordinal), "状態を返す");
+            Check("unknown.path", Send(server.Port, "GET", "/api/secret", host, origin).Status == 404, "未知のパスは 404");
+            Check("traversal", Send(server.Port, "GET", "/../settings.json", host, origin).Status == 404, "パス探索を拒否する");
+            Check("static.missing", Send(server.Port, "GET", "/", host, origin).Status == 404, "index.html が無ければ 404");
 
             File.WriteAllText(Path.Combine(workDirectory, "index.html"), "<!doctype html><title>t</title>", encoding);
-            var page = Send(server.Port, "GET", "/", host, origin, server.Token);
+            var page = Send(server.Port, "GET", "/", host, origin);
             Check("static.served", page.Status == 200 && page.Body.Contains("doctype", StringComparison.OrdinalIgnoreCase), "index.html を配信できる");
-            Check("static.unauthorized", Send(server.Port, "GET", "/", host, origin, token: null).Status == 401, "ページ自体もトークンを要求する");
 
             // 実際に配信する WebUI と、保存後の反映通知。
             var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
@@ -119,75 +114,45 @@ public static class ServerSelfCheck
                 var uiHost = $"127.0.0.1:{uiServer.Port}";
                 var uiOrigin = $"http://{uiHost}";
 
-                var index = Send(uiServer.Port, "GET", "/", uiHost, uiOrigin, uiServer.Token);
-                var assetToken = Uri.EscapeDataString(uiServer.Token);
+                var index = Send(uiServer.Port, "GET", "/", uiHost, uiOrigin);
                 Check(
                     "webui.index",
                     index.Status == 200 && index.Body.Contains("LeafHotKey", StringComparison.Ordinal) &&
-                    index.Body.Contains($"styles.css?token={assetToken}", StringComparison.Ordinal) &&
-                    index.Body.Contains($"app.js?token={assetToken}", StringComparison.Ordinal) &&
+                    index.Body.Contains("styles.css", StringComparison.Ordinal) &&
+                    index.Body.Contains("app.js", StringComparison.Ordinal) &&
                     !index.Body.Contains("__LEAFHOTKEY_TOKEN__", StringComparison.Ordinal),
-                    "WebUI の index.html を配信し、サブリソースへトークンを埋め込む");
+                    "WebUI の index.html をトークンなしで配信する");
                 Check(
                     "webui.css",
-                    Send(uiServer.Port, "GET", "/styles.css", uiHost, uiOrigin, token: null).Status == 200,
-                    "styles.css はトークンなしでも配信する");
+                    Send(uiServer.Port, "GET", "/styles.css", uiHost, uiOrigin).Status == 200,
+                    "styles.css を配信する");
 
-                var script = Send(uiServer.Port, "GET", "/app.js", uiHost, uiOrigin, token: null);
+                var script = Send(uiServer.Port, "GET", "/app.js", uiHost, uiOrigin);
                 Check(
                     "webui.js",
-                    script.Status == 200 && script.Body.Contains("X-LeafHotKey-Token", StringComparison.Ordinal),
-                    "app.js はトークンなしでも配信する");
+                    script.Status == 200 && !script.Body.Contains("X-LeafHotKey-Token", StringComparison.Ordinal),
+                    "app.js を配信し、トークンヘッダを使わない");
 
-                var pageTarget = "/?token=" + assetToken;
                 Check("webui.reload",
-                    Send(uiServer.Port, "GET", pageTarget, uiHost, origin: null, token: null).Status == 200 &&
-                    Send(uiServer.Port, "GET", pageTarget, uiHost, origin: null, token: null).Status == 200,
-                    "同じ認証URLで初回表示と再読み込みができる");
-                var expired = Send(uiServer.Port, "GET", "/?token=" + server.Token, uiHost, origin: null, token: null);
-                Check("webui.expired", expired.Status == 401 && expired.Body.Contains("設定を開く", StringComparison.Ordinal),
-                    "別インスタンスのトークンは拒否し、開き直しを案内する");
-                var noToken = Send(uiServer.Port, "GET", "/", uiHost, origin: null, token: null);
-                Check("webui.no-token", noToken.Status == 401 && noToken.Body.Contains("設定を開く", StringComparison.Ordinal),
-                    "認証のないページには開き直しを案内する");
+                    Send(uiServer.Port, "GET", "/", uiHost, origin: null).Status == 200 &&
+                    Send(uiServer.Port, "GET", "/", uiHost, origin: null).Status == 200,
+                    "同じ URL で初回表示と再読み込みができる");
 
                 // プロファイル行のアプリアイコン配信。
-                var icon = Send(server.Port, "GET", "/api/icon?name=LeafHotKey.exe", host, origin, server.Token);
+                var icon = Send(server.Port, "GET", "/api/icon?name=LeafHotKey.exe", host, origin);
                 Check(
                     "icon.ok",
                     icon.Status == 200 && icon.Body.Contains("PNG", StringComparison.Ordinal),
                     $"起動中の実行ファイルのアイコンを PNG で返す（{icon.Status}）");
-                var iconMissing = Send(server.Port, "GET", "/api/icon?name=leafhotkey-absent-app.exe", host, origin, server.Token);
+                var iconMissing = Send(server.Port, "GET", "/api/icon?name=leafhotkey-absent-app.exe", host, origin);
                 Check("icon.missing", iconMissing.Status == 404, "見つからない実行ファイルは 404");
-                var iconTraversal = Send(server.Port, "GET", "/api/icon?name=..%5C..%5CWindows%5CSystem32%5Ccalc.exe", host, origin, server.Token);
+                var iconTraversal = Send(server.Port, "GET", "/api/icon?name=..%5C..%5CWindows%5CSystem32%5Ccalc.exe", host, origin);
                 Check("icon.traversal", iconTraversal.Status == 404, "パス指定や親ディレクトリ参照は受け付けない");
-                var iconAnonymous = Send(server.Port, "GET", "/api/icon?name=LeafHotKey.exe", host, origin, token: null);
-                Check("icon.unauthorized", iconAnonymous.Status == 401, "トークンなしのアイコン取得は 401");
 
-                // 安定 URL: 保存したトークンと固定ポートを使い回す。
-                var identityDirectory = Path.Combine(Path.GetTempPath(), "leafhotkey-webui-" + Guid.NewGuid().ToString("N"));
-                try
-                {
-                    var identityPath = Path.Combine(identityDirectory, "webui.token");
-                    var firstToken = WebUiIdentity.LoadOrCreate(identityPath);
-                    var secondToken = WebUiIdentity.LoadOrCreate(identityPath);
-                    Check(
-                        "webui.token.stable",
-                        firstToken == secondToken && firstToken.Length >= 32 && File.Exists(identityPath),
-                        "再起動しても同じトークンを使う");
-                    Check(
-                        "webui.token.saved",
-                        File.ReadAllText(identityPath, encoding).Trim() == firstToken,
-                        "トークンを保存先から読み直せる");
-                    Check(
-                        "webui.port.fixed",
-                        WebUiIdentity.DefaultPort == 17832,
-                        $"固定ポート {WebUiIdentity.DefaultPort} で待ち受ける（使用中は空きポートへ退避）");
-                }
-                finally
-                {
-                    Directory.Delete(identityDirectory, recursive: true);
-                }
+                Check(
+                    "webui.port.fixed",
+                    SettingsServer.DefaultPort == 17832,
+                    $"固定ポート {SettingsServer.DefaultPort} で待ち受ける（使用中は空きポートへ退避）");
 
                 var snapshot2 = store2.Load();
                 var body2 = JsonSerializer.Serialize(new
@@ -196,7 +161,7 @@ public static class ServerSelfCheck
                     json = snapshot2.Json.Replace("\"resumeDelayMs\": 1000", "\"resumeDelayMs\": 1500", StringComparison.Ordinal),
                 });
 
-                var applyResult = Send(uiServer.Port, "POST", "/api/settings", uiHost, uiOrigin, uiServer.Token, body2);
+                var applyResult = Send(uiServer.Port, "POST", "/api/settings", uiHost, uiOrigin, body2);
                 Check("webui.save", applyResult.Status == 200, "WebUI 経由の保存が通る");
                 Check(
                     "webui.applied",
@@ -233,7 +198,6 @@ public static class ServerSelfCheck
         string target,
         string host,
         string? origin,
-        string? token,
         string? body = null)
     {
         var encoding = new UTF8Encoding(false);
@@ -248,7 +212,6 @@ public static class ServerSelfCheck
             .Append("Host: ").Append(host).Append("\r\n");
 
         if (origin is not null) request.Append("Origin: ").Append(origin).Append("\r\n");
-        if (token is not null) request.Append("X-LeafHotKey-Token: ").Append(token).Append("\r\n");
         if (body is not null)
         {
             request.Append("Content-Type: application/json\r\n")

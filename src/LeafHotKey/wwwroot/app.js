@@ -1,11 +1,6 @@
 "use strict";
 
 (() => {
-  const pageUrl = new URL(window.location.href);
-  const token = pageUrl.searchParams.get("token") || "";
-  // HTML 自体も認証必須。URLから消すとF5で401になるため保持する。
-  // トークンは起動ごとに失効する。URLを共有せず、no-referrerを維持する。
-
   const el = (id) => document.getElementById(id);
   const root = document.documentElement;
   const alertBox = el("alert");
@@ -39,7 +34,6 @@
       const response = await fetch(path, {
         ...options,
         headers: {
-          "X-LeafHotKey-Token": token,
           ...(options.body ? { "Content-Type": "application/json" } : {}),
           ...(options.headers || {}),
         },
@@ -116,7 +110,7 @@
       const image = document.createElement("img");
       image.alt = "";
       image.loading = "lazy";
-      image.src = `api/icon?name=${encodeURIComponent(processName)}&token=${encodeURIComponent(token)}`;
+      image.src = `api/icon?name=${encodeURIComponent(processName)}`;
       image.addEventListener("load", () => icon.classList.add("app-icon-image"));
       image.addEventListener("error", () => {
         image.remove();

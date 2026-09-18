@@ -109,16 +109,14 @@ public static class Program
                 {
                     if (store is not null)
                     {
-                        // URL を起動ごとに変えないよう、固定ポートと保存したトークンを使う。
-                        var token = WebUiIdentity.LoadOrCreate(WebUiIdentity.TokenPath);
+                        // URL を固定するため、トークンを使わず既定ポートで待ち受ける。
                         var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
                         web = new SettingsServer(
                             store,
-                            WebUiIdentity.DefaultPort,
+                            SettingsServer.DefaultPort,
                             statusJson: () => StatusJson(state, engine),
                             webRoot: webRoot,
-                            onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles),
-                            token: token);
+                            onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles));
                         try
                         {
                             web.Start();
@@ -132,8 +130,7 @@ public static class Program
                                 port: 0,
                                 statusJson: () => StatusJson(state, engine),
                                 webRoot: webRoot,
-                                onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles),
-                                token: token);
+                                onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles));
                             web.Start();
                         }
                     }

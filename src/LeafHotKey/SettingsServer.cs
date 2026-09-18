@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Sockets;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -24,6 +23,9 @@ public sealed class SettingsServer : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
 
+    /// <summary>設定画面の既定ポート。URL を固定するために使う。</summary>
+    public const int DefaultPort = 17832;
+
     private static readonly TimeSpan ClientTimeout = TimeSpan.FromSeconds(5);
 
     public SettingsServer(
@@ -31,27 +33,19 @@ public sealed class SettingsServer : IDisposable
         int port = 0,
         Func<string>? statusJson = null,
         string? webRoot = null,
-        Action<SettingsSnapshot>? onSaved = null,
-        string? token = null)
+        Action<SettingsSnapshot>? onSaved = null)
     {
         _store = store;
         _statusJson = statusJson;
         _webRoot = webRoot;
         _onSaved = onSaved;
         _listener = new TcpListener(IPAddress.Loopback, port);
-        Token = token ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .Replace('+', '-')
-            .Replace('/', '_')
-            .TrimEnd('=');
     }
-
-    /// <summary>この起動でだけ有効な認証トークン。</summary>
-    public string Token { get; }
 
     public int Port { get; private set; }
 
-    /// <summary>ブラウザで開く URL。トークンを含む。</summary>
-    public string Url => $"http://127.0.0.1:{Port}/?token={Token}";
+    /// <summary>ブラウザで開く URL。トークンを使わず、常に同じ URL になる。</summary>
+    public string Url => $"http://127.0.0.1:{Port}/";
 
     private string ExpectedHost => $"127.0.0.1:{Port}";
 
@@ -151,16 +145,6 @@ public sealed class SettingsServer : IDisposable
         if (origin is not null && !string.Equals(origin, ExpectedOrigin, StringComparison.OrdinalIgnoreCase))
         {
             await WriteAsync(stream, 403, "text/plain; charset=utf-8", "origin mismatch").ConfigureAwait(false);
-            return;
-        }
-
-        // CSS/JS はブラウザがカスタムヘッダを付けられない。中身に秘密はないので認証しない。
-        if (RequiresAuth(request) && !IsAuthorized(request))
-        {
-            var message = request.Method == "GET" && (request.Path == "/" || request.Path == "/index.html")
-                ? "認証情報がないか、期限が切れています。\nタスクトレイの LeafHotKey を右クリックし「設定を開く」から開き直してください。"
-                : "unauthorized";
-            await WriteAsync(stream, 401, "text/plain; charset=utf-8", message).ConfigureAwait(false);
             return;
         }
 
@@ -309,47 +293,8 @@ public sealed class SettingsServer : IDisposable
         }
 
         var content = await File.ReadAllTextAsync(file, new UTF8Encoding(false)).ConfigureAwait(false);
-        if (string.Equals(name, "index.html", StringComparison.OrdinalIgnoreCase))
-        {
-            // ブラウザのサブリソース要求にも、初回ページと同じ認証トークンを付ける。
-            content = content.Replace(
-                "__LEAFHOTKEY_TOKEN__",
-                Uri.EscapeDataString(Token),
-                StringComparison.Ordinal);
-        }
 
         await WriteAsync(stream, 200, contentType, content).ConfigureAwait(false);
-    }
-
-    private static bool RequiresAuth(HttpRequest request)
-    {
-        if (request.Method != "GET") return true;
-        var name = request.Path == "/" ? "index.html" : request.Path.TrimStart('/');
-        return !name.Equals("styles.css", StringComparison.OrdinalIgnoreCase)
-            && !name.Equals("app.js", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private bool IsAuthorized(HttpRequest request)
-    {
-        var header = request.Header("x-leafhotkey-token");
-        if (header is not null && FixedEquals(header, Token)) return true;
-
-        var authorization = request.Header("authorization");
-        if (authorization is not null &&
-            authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) &&
-            FixedEquals(authorization[7..].Trim(), Token))
-        {
-            return true;
-        }
-
-        // 初回のページ表示だけクエリのトークンを許す。
-        return request.Query("token") is { } queryToken && FixedEquals(queryToken, Token);
-    }
-
-    private static bool FixedEquals(string left, string right)
-    {
-        var encoding = new UTF8Encoding(false);
-        return CryptographicOperations.FixedTimeEquals(encoding.GetBytes(left), encoding.GetBytes(right));
     }
 
     private static async Task WriteJsonError(Stream stream, int status, string message)
