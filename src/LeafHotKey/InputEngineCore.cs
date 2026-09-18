@@ -28,6 +28,9 @@ public interface IKeySink
     bool VerifyKeyUp(string keyName) => true;
 }
 
+/// <summary>保持の定期点検結果。</summary>
+public readonly record struct HoldSweepResult(bool HasHolds, IReadOnlyList<string> ReleasedKeys);
+
 /// <summary>
 /// フックから渡されたキー操作を、どのルールで処理するか決める中核。
 /// フック内で待機やディスクアクセスを行わないよう、ここでは判定と送信要求だけを扱う。
@@ -35,6 +38,8 @@ public interface IKeySink
 public sealed class InputEngineCore
 {
     private readonly IKeySink _sink;
+    private readonly object _gate = new();
+    private HotkeyProfile? _activeProfile;
 
     /// <summary>現在物理的に押されている前置キーと、その前置キーで組み合わせが発火したか。</summary>
     private readonly Dictionary<string, bool> _heldPrefixes = new(StringComparer.OrdinalIgnoreCase);
@@ -50,7 +55,13 @@ public sealed class InputEngineCore
         _sink = sink;
     }
 
-    public HotkeyProfile? ActiveProfile { get; private set; }
+    public HotkeyProfile? ActiveProfile
+    {
+        get
+        {
+            lock (_gate) return _activeProfile;
+        }
+    }
 
     /// <summary>判定の経過を残すための記録先（切り分け用）。</summary>
     public Action<string>? Trace { get; set; }
@@ -61,26 +72,51 @@ public sealed class InputEngineCore
     /// </summary>
     public Func<string, bool?>? PhysicalKeyState { get; set; }
 
-    public IReadOnlyCollection<string> HeldPrefixes => _heldPrefixes.Keys;
+    public IReadOnlyCollection<string> HeldPrefixes
+    {
+        get
+        {
+            lock (_gate) return _heldPrefixes.Keys.ToArray();
+        }
+    }
 
-    public IReadOnlyCollection<string> ActiveHoldModifiers =>
-        _activeHolds.Values.SelectMany(modifiers => modifiers).ToArray();
+    public IReadOnlyCollection<string> ActiveHoldModifiers
+    {
+        get
+        {
+            lock (_gate) return _activeHolds.Values.SelectMany(modifiers => modifiers).ToArray();
+        }
+    }
 
     /// <summary>保持中の修飾キー（解除キー名→修飾キー）。取りこぼし検出に使う。</summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<string>> ActiveHolds =>
-        _activeHolds.ToDictionary(entry => entry.Key, entry => (IReadOnlyList<string>)entry.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> ActiveHolds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _activeHolds.ToDictionary(
+                    entry => entry.Key,
+                    entry => (IReadOnlyList<string>)entry.Value.ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+        }
+    }
 
     /// <summary>指定した解除キーの保持を解放する。取りこぼした解除を補うときに使う。</summary>
     public void ReleaseHolds(string releaseKey)
     {
-        if (!_activeHolds.TryGetValue(releaseKey, out var modifiers)) return;
+        lock (_gate) ReleaseHoldsCore(releaseKey);
+    }
 
-        foreach (var modifier in modifiers)
+    private void ReleaseHoldsCore(string releaseKey)
+    {
+        if (!_activeHolds.Remove(releaseKey, out var modifiers)) return;
+
+        foreach (var modifier in modifiers.ToArray())
         {
             SendUp(modifier);
         }
-
-        _activeHolds.Remove(releaseKey);
     }
 
     /// <summary>
@@ -89,36 +125,84 @@ public sealed class InputEngineCore
     /// </summary>
     public void ReassertHolds(Func<string, bool> isModifierDown)
     {
-        foreach (var modifiers in _activeHolds.Values)
+        ArgumentNullException.ThrowIfNull(isModifierDown);
+        lock (_gate) ReassertHoldsCore(isModifierDown);
+    }
+
+    private void ReassertHoldsCore(Func<string, bool> isModifierDown)
+    {
+        foreach (var modifier in _activeHolds.Values
+                     .SelectMany(modifiers => modifiers)
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .ToArray())
         {
-            foreach (var modifier in modifiers)
+            if (isModifierDown(modifier)) continue;
+            _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Down, SendModifiers.None) });
+        }
+    }
+
+    /// <summary>
+    /// 保持の再保持と、解除キーの取りこぼし回収を同じロック内で行う。
+    /// 保持のスナップショット取得と解放を別々に呼ぶと、解放と再保持が逆順になり得る。
+    /// </summary>
+    public HoldSweepResult SweepHolds(
+        Func<string, bool> isModifierDown,
+        Func<string, bool> isReleaseKeyDown)
+    {
+        ArgumentNullException.ThrowIfNull(isModifierDown);
+        ArgumentNullException.ThrowIfNull(isReleaseKeyDown);
+
+        lock (_gate)
+        {
+            ReassertHoldsCore(isModifierDown);
+
+            var releasedKeys = new List<string>();
+            foreach (var releaseKey in _activeHolds.Keys.ToArray())
             {
-                if (isModifierDown(modifier)) continue;
-                _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Down, SendModifiers.None) });
+                if (isReleaseKeyDown(releaseKey)) continue;
+
+                ReleaseHoldsCore(releaseKey);
+                releasedKeys.Add(releaseKey);
             }
+
+            return new HoldSweepResult(_activeHolds.Count > 0, releasedKeys);
         }
     }
 
     /// <summary>前面アプリが変わったときに呼ぶ。保持中のキーは必ず解放する。</summary>
     public void SetActiveProfile(HotkeyProfile? profile)
     {
-        if (ReferenceEquals(profile, ActiveProfile)) return;
+        lock (_gate)
+        {
+            if (ReferenceEquals(profile, _activeProfile)) return;
 
-        ReleaseAll();
-        ActiveProfile = profile;
+            ReleaseAllCore();
+            _activeProfile = profile;
+        }
     }
 
     /// <summary>保持中の修飾キーをすべて解放し、前置キーの状態も捨てる。</summary>
     public void ReleaseAll()
     {
-        foreach (var modifier in _activeHolds.Values.SelectMany(list => list).Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            SendUp(modifier);
-        }
+        lock (_gate) ReleaseAllCore();
+    }
 
+    private void ReleaseAllCore()
+    {
+        var modifiers = _activeHolds.Values
+            .SelectMany(list => list)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        // 送信中に再入した入力を、今回の解放処理で消さないよう先に状態を捨てる。
         _activeHolds.Clear();
         _heldPrefixes.Clear();
         _suppressedDownKeys.Clear();
+
+        foreach (var modifier in modifiers)
+        {
+            SendUp(modifier);
+        }
     }
 
     /// <summary>解放を送り、実際に離れたかを確かめる（離れていなければ一度だけ送り直す）。</summary>
@@ -133,15 +217,18 @@ public sealed class InputEngineCore
 
     public InputDecision OnKeyDown(string key, SendModifiers modifiers)
     {
-        var decision = DecideKeyDown(key, modifiers);
-        if (decision == InputDecision.Suppress) _suppressedDownKeys.Add(key);
-        return decision;
+        lock (_gate)
+        {
+            var decision = DecideKeyDown(key, modifiers);
+            if (decision == InputDecision.Suppress) _suppressedDownKeys.Add(key);
+            return decision;
+        }
     }
 
     private InputDecision DecideKeyDown(string key, SendModifiers modifiers)
     {
-        var profile = ActiveProfile;
-        Trace?.Invoke($"down {key} mods={modifiers} profile={profile?.Id ?? "-"} prefixes=[{string.Join(",", _heldPrefixes.Keys)}] holds=[{string.Join(",", ActiveHoldModifiers)}]");
+        var profile = _activeProfile;
+        Trace?.Invoke($"down {key} mods={modifiers} profile={profile?.Id ?? "-"} prefixes=[{string.Join(",", _heldPrefixes.Keys)}] holds=[{string.Join(",", _activeHolds.Values.SelectMany(list => list))}]");
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
 
         // 前置キーの押下/解放を取りこぼしても、物理状態が正なら前置として扱う（AHK と同じ発想）。
@@ -207,22 +294,26 @@ public sealed class InputEngineCore
 
     public InputDecision OnKeyUp(string key, SendModifiers modifiers)
     {
-        var profile = ActiveProfile;
-        Trace?.Invoke($"up   {key} mods={modifiers} profile={profile?.Id ?? "-"} holds=[{string.Join(",", ActiveHoldModifiers)}]");
+        lock (_gate) return OnKeyUpCore(key, modifiers);
+    }
+
+    private InputDecision OnKeyUpCore(string key, SendModifiers modifiers)
+    {
+        var profile = _activeProfile;
+        Trace?.Invoke($"up   {key} mods={modifiers} profile={profile?.Id ?? "-"} holds=[{string.Join(",", _activeHolds.Values.SelectMany(list => list))}]");
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
 
         // 押下を抑止したキーは、解放も抑止して対を揃える。
         var decision = _suppressedDownKeys.Remove(key) ? InputDecision.Suppress : InputDecision.PassThrough;
 
         // 保持中の修飾キーは、解除キーを離した時点で必ず解放する。
-        if (_activeHolds.TryGetValue(key, out var holdModifiers))
+        if (_activeHolds.Remove(key, out var holdModifiers))
         {
-            foreach (var modifier in holdModifiers)
+            foreach (var modifier in holdModifiers.ToArray())
             {
                 SendUp(modifier);
             }
 
-            _activeHolds.Remove(key);
             decision = HasPassthrough(profile, key) ? decision : InputDecision.Suppress;
 
             // Hold の前置キーは押下時に発火済み。単体ルールをもう一度実行しない。

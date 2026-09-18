@@ -22,6 +22,7 @@ public sealed class InputEngine : IDisposable
     private Thread? _thread;
     private uint _threadId;
     private System.Threading.Timer? _holdWatchdog;
+    private readonly object _holdSweepGate = new();
 
     /// <summary>解除キーが物理的に押されているのを確認できたもの（誤解放を避ける）。</summary>
     private readonly HashSet<string> _holdKeysSeenDown = new(StringComparer.OrdinalIgnoreCase);
@@ -29,6 +30,9 @@ public sealed class InputEngine : IDisposable
     /// <summary>保持した修飾キーが実際に押されたのを確認できたもの。</summary>
     private readonly HashSet<string> _holdModifiersSeenDown = new(StringComparer.OrdinalIgnoreCase);
     private volatile bool _enabled = true;
+    private int _holdSweeps;
+    private int _holdReasserts;
+    private int _holdReleases;
 
     public InputEngine(IReadOnlyList<HotkeyProfile> profiles, bool disableIme = true, KeySender? sender = null)
     {
@@ -84,9 +88,17 @@ public sealed class InputEngine : IDisposable
         get => _enabled;
         set
         {
-            if (_enabled == value) return;
-            _enabled = value;
-            if (!value) _core.ReleaseAll();
+            lock (_holdSweepGate)
+            {
+                if (_enabled == value) return;
+                _enabled = value;
+                if (!value)
+                {
+                    _core.ReleaseAll();
+                    _holdKeysSeenDown.Clear();
+                    _holdModifiersSeenDown.Clear();
+                }
+            }
         }
     }
 
@@ -98,9 +110,14 @@ public sealed class InputEngine : IDisposable
     /// </summary>
     public void ApplyProfiles(IReadOnlyList<HotkeyProfile> profiles, bool disableIme)
     {
-        _core.SetActiveProfile(null);
-        _profiles = profiles;
-        _disableIme = disableIme;
+        lock (_holdSweepGate)
+        {
+            _core.SetActiveProfile(null);
+            _profiles = profiles;
+            _disableIme = disableIme;
+            _holdKeysSeenDown.Clear();
+            _holdModifiersSeenDown.Clear();
+        }
     }
 
     public string ActiveProfileName => _core.ActiveProfile?.Name ?? string.Empty;
@@ -138,58 +155,64 @@ public sealed class InputEngine : IDisposable
     /// </summary>
     private void SweepHolds()
     {
-        HoldSweeps++;
-        if (!_enabled) return;
-
-        var holds = _core.ActiveHolds;
-        if (holds.Count == 0)
+        lock (_holdSweepGate)
         {
-            _holdKeysSeenDown.Clear();
-            _holdModifiersSeenDown.Clear();
-            return;
-        }
+            Interlocked.Increment(ref _holdSweeps);
+            if (!_enabled) return;
 
-        // 修飾キーが外れていたら押し直す（アプリ側で解放された場合の安全網）。
-        // 一度も押下を確認できていない環境では触らない。
-        _core.ReassertHolds(modifier =>
-        {
-            if (KeyResolver.TryVirtualKeyFor(modifier, out var modifierKey) &&
-                (NativeMethods.GetAsyncKeyState(modifierKey) & 0x8000) != 0)
+            // 再保持と解放の判定を Core の同一ロック内で行う。
+            // ActiveHolds のスナップショット後にフック側が解放すると、
+            // 古いスナップショットを使った再保持で修飾キーが再び固まるため。
+            var result = _core.SweepHolds(
+                modifier =>
+                {
+                    if (KeyResolver.TryVirtualKeyFor(modifier, out var modifierKey) &&
+                        (NativeMethods.GetAsyncKeyState(modifierKey) & 0x8000) != 0)
+                    {
+                        _holdModifiersSeenDown.Add(modifier);
+                        return true;
+                    }
+
+                    if (!_holdModifiersSeenDown.Contains(modifier)) return true;
+
+                    Interlocked.Increment(ref _holdReasserts);
+                    return false;
+                },
+                releaseKey =>
+                {
+                    if (!KeyResolver.TryVirtualKeyFor(releaseKey, out var virtualKey)) return true;
+                    if ((NativeMethods.GetAsyncKeyState(virtualKey) & 0x8000) != 0)
+                    {
+                        _holdKeysSeenDown.Add(releaseKey);
+                        return true;
+                    }
+
+                    // 押下を確認できた後の「離れている」だけを、見逃した解除として扱う。
+                    if (!_holdKeysSeenDown.Remove(releaseKey)) return true;
+
+                    Interlocked.Increment(ref _holdReleases);
+                    return false;
+                });
+
+            if (!result.HasHolds)
             {
-                _holdModifiersSeenDown.Add(modifier);
-                return true;
+                _holdKeysSeenDown.Clear();
+                _holdModifiersSeenDown.Clear();
             }
 
-            if (!_holdModifiersSeenDown.Contains(modifier)) return true;
-
-            HoldReasserts++;
-            return false;
-        });
-
-        foreach (var hold in holds)
-        {
-            if (!KeyResolver.TryVirtualKeyFor(hold.Key, out var virtualKey)) continue;
-            if ((NativeMethods.GetAsyncKeyState(virtualKey) & 0x8000) != 0)
+            foreach (var releaseKey in result.ReleasedKeys)
             {
-                _holdKeysSeenDown.Add(hold.Key);
-                continue;
+                Trace?.Invoke($"sweep release {releaseKey}");
             }
-
-            // 押下を確認できた後の「離れている」だけを、見逃した解除として扱う。
-            if (!_holdKeysSeenDown.Remove(hold.Key)) continue;
-
-            HoldReleases++;
-            _core.ReleaseHolds(hold.Key);
-            Trace?.Invoke($"sweep release {hold.Key}");
         }
     }
 
     /// <summary>保持の安全網が動いた回数（検証用）。</summary>
-    public int HoldSweeps { get; private set; }
+    public int HoldSweeps => Volatile.Read(ref _holdSweeps);
 
-    public int HoldReasserts { get; private set; }
+    public int HoldReasserts => Volatile.Read(ref _holdReasserts);
 
-    public int HoldReleases { get; private set; }
+    public int HoldReleases => Volatile.Read(ref _holdReleases);
 
     /// <summary>現在保持している修飾キー（表示用）。</summary>
     public IReadOnlyCollection<string> HeldModifiers => _core.ActiveHoldModifiers;
@@ -200,10 +223,15 @@ public sealed class InputEngine : IDisposable
     /// </summary>
     public void Stop()
     {
-        _enabled = false;
-        _holdWatchdog?.Dispose();
-        _holdWatchdog = null;
-        _core.ReleaseAll();
+        lock (_holdSweepGate)
+        {
+            _enabled = false;
+            _holdWatchdog?.Dispose();
+            _holdWatchdog = null;
+            _core.ReleaseAll();
+            _holdKeysSeenDown.Clear();
+            _holdModifiersSeenDown.Clear();
+        }
 
         if (_threadId != 0)
         {
@@ -325,14 +353,21 @@ public sealed class InputEngine : IDisposable
 
     private IntPtr Dispatch(string name, bool keyUp, int nCode, IntPtr wParam, IntPtr lParam)
     {
-        UpdateActiveProfile();
+        // 無効化・設定差し替え・保持監視と入力判定を同じ境界で直列化する。
+        // 無効化直前に通過したフックが、ReleaseAll 後に古いルールを発火させないため。
+        lock (_holdSweepGate)
+        {
+            if (!_enabled) return NativeMethods.CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
 
-        var modifiers = CurrentModifiers();
-        var decision = keyUp ? _core.OnKeyUp(name, modifiers) : _core.OnKeyDown(name, modifiers);
+            UpdateActiveProfile();
 
-        return decision == InputDecision.Suppress
-            ? new IntPtr(1)
-            : NativeMethods.CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
+            var modifiers = CurrentModifiers();
+            var decision = keyUp ? _core.OnKeyUp(name, modifiers) : _core.OnKeyDown(name, modifiers);
+
+            return decision == InputDecision.Suppress
+                ? new IntPtr(1)
+                : NativeMethods.CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
+        }
     }
 
     private void UpdateActiveProfile()
