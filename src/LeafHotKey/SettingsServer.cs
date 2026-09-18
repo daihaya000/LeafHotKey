@@ -242,6 +242,20 @@ public sealed class SettingsServer : IDisposable
                 return;
             }
 
+            case ("GET", "/api/icon"):
+            {
+                // ブラウザの img はヘッダを付けられないため、トークンはクエリでも受け付ける（IsAuthorized）。
+                var payload = request.Query("name") is { } name ? ProcessIcons.PngFor(name) : null;
+                if (payload is null)
+                {
+                    await WriteAsync(stream, 404, "text/plain; charset=utf-8", "no icon").ConfigureAwait(false);
+                    return;
+                }
+
+                await WriteBinaryAsync(stream, 200, "image/png", payload).ConfigureAwait(false);
+                return;
+            }
+
             default:
                 await ServeStaticAsync(stream, request).ConfigureAwait(false);
                 return;
@@ -358,6 +372,23 @@ public sealed class SettingsServer : IDisposable
 
         var headerBytes = encoding.GetBytes(header);
         await stream.WriteAsync(headerBytes).ConfigureAwait(false);
+        await stream.WriteAsync(payload).ConfigureAwait(false);
+        await stream.FlushAsync().ConfigureAwait(false);
+    }
+
+    private static async Task WriteBinaryAsync(Stream stream, int status, string contentType, byte[] payload)
+    {
+        var encoding = new UTF8Encoding(false);
+        var header = new StringBuilder()
+            .Append("HTTP/1.1 ").Append(status).Append(' ').Append(ReasonFor(status)).Append("\r\n")
+            .Append("Content-Type: ").Append(contentType).Append("\r\n")
+            .Append("Content-Length: ").Append(payload.Length).Append("\r\n")
+            .Append("Cache-Control: no-store\r\n")
+            .Append("X-Content-Type-Options: nosniff\r\n")
+            .Append("Connection: close\r\n\r\n")
+            .ToString();
+
+        await stream.WriteAsync(encoding.GetBytes(header)).ConfigureAwait(false);
         await stream.WriteAsync(payload).ConfigureAwait(false);
         await stream.FlushAsync().ConfigureAwait(false);
     }

@@ -332,7 +332,12 @@
         color: var(--label-secondary);
         font-size: 12px;
         font-weight: 650;
+        overflow: hidden;
       }
+
+      /* 実アイコンを表示できた行は、下地のプレートを見せない。 */
+      .app-icon-image { background: transparent; }
+      .app-icon img { width: 28px; height: 28px; border-radius: 7px; object-fit: contain; }
       .list-primary { min-width: 0; flex: 1; }
       .list-primary strong { display: block; overflow: hidden; color: var(--label); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
       .list-primary span { display: block; overflow: hidden; margin-top: 3px; color: var(--label-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

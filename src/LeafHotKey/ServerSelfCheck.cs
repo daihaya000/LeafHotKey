@@ -151,6 +151,19 @@ public static class ServerSelfCheck
                 Check("webui.no-token", noToken.Status == 401 && noToken.Body.Contains("設定を開く", StringComparison.Ordinal),
                     "認証のないページには開き直しを案内する");
 
+                // プロファイル行のアプリアイコン配信。
+                var icon = Send(server.Port, "GET", "/api/icon?name=LeafHotKey.exe", host, origin, server.Token);
+                Check(
+                    "icon.ok",
+                    icon.Status == 200 && icon.Body.Contains("PNG", StringComparison.Ordinal),
+                    $"起動中の実行ファイルのアイコンを PNG で返す（{icon.Status}）");
+                var iconMissing = Send(server.Port, "GET", "/api/icon?name=leafhotkey-absent-app.exe", host, origin, server.Token);
+                Check("icon.missing", iconMissing.Status == 404, "見つからない実行ファイルは 404");
+                var iconTraversal = Send(server.Port, "GET", "/api/icon?name=..%5C..%5CWindows%5CSystem32%5Ccalc.exe", host, origin, server.Token);
+                Check("icon.traversal", iconTraversal.Status == 404, "パス指定や親ディレクトリ参照は受け付けない");
+                var iconAnonymous = Send(server.Port, "GET", "/api/icon?name=LeafHotKey.exe", host, origin, token: null);
+                Check("icon.unauthorized", iconAnonymous.Status == 401, "トークンなしのアイコン取得は 401");
+
                 var snapshot2 = store2.Load();
                 var body2 = JsonSerializer.Serialize(new
                 {

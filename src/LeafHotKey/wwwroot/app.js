@@ -110,7 +110,22 @@
     const icon = document.createElement("div");
     icon.className = "app-icon";
     icon.setAttribute("aria-hidden", "true");
-    icon.textContent = profileInitials(profile);
+    // 対象実行ファイルのアイコンを出す。取得できない場合はモノグラムのままにする。
+    const processName = (profile.processNames || [])[0];
+    if (processName) {
+      const image = document.createElement("img");
+      image.alt = "";
+      image.loading = "lazy";
+      image.src = `api/icon?name=${encodeURIComponent(processName)}&token=${encodeURIComponent(token)}`;
+      image.addEventListener("load", () => icon.classList.add("app-icon-image"));
+      image.addEventListener("error", () => {
+        image.remove();
+        icon.textContent = profileInitials(profile);
+      });
+      icon.append(image);
+    } else {
+      icon.textContent = profileInitials(profile);
+    }
 
     const name = document.createElement("strong");
     name.textContent = profile.name || profile.id || "名称未設定";
