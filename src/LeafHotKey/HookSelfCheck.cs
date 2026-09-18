@@ -148,6 +148,17 @@ public static class HookSelfCheck
             "停止時に保持中の Ctrl を解放する");
         Check("engine.stop.uninstall", !engine.Installed, "停止後はフックが残らない");
 
+        // Stop 後の再開で ready 状態と監視タイマーを正しく再初期化する。
+        var restarted = engine.Start();
+        engine.Enabled = true;
+        Check("engine.restart.installed", restarted && engine.Installed, "停止後も再開できる");
+        var afterRestart = Simulate("{F13}", 2);
+        Check(
+            "engine.restart.convert",
+            afterRestart.Count(e => e.VirtualKey == VkEscape) == 2,
+            "再開後も変換が有効になる");
+        engine.Stop();
+
         var afterStopEvents = Simulate("{F13}", 2);
         Check(
             "engine.stop.passthrough",

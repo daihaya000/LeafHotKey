@@ -23,6 +23,7 @@ public sealed class InputEngine : IDisposable
     private uint _threadId;
     private System.Threading.Timer? _holdWatchdog;
     private readonly object _holdSweepGate = new();
+    private bool _stopRequested;
 
     /// <summary>解除キーが物理的に押されているのを確認できたもの（誤解放を避ける）。</summary>
     private readonly HashSet<string> _holdKeysSeenDown = new(StringComparer.OrdinalIgnoreCase);
@@ -134,6 +135,10 @@ public sealed class InputEngine : IDisposable
     {
         if (_thread is not null) throw new InvalidOperationException("入力エンジンは既に開始済みです。");
 
+        // Stop 後に再開できるよう、前回の Pump 完了状態を持ち越さない。
+        _ready.Reset();
+        lock (_holdSweepGate) _stopRequested = false;
+
         _thread = new Thread(Pump)
         {
             IsBackground = true,
@@ -143,10 +148,20 @@ public sealed class InputEngine : IDisposable
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
 
-        // 保持キーの取りこぼし（解除イベントの見逃し）を定期的に回収する。
-        _holdWatchdog = new System.Threading.Timer(_ => SweepHolds(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var started = _ready.Wait(TimeSpan.FromSeconds(5)) && Installed;
+        if (!started) return false;
 
-        return _ready.Wait(TimeSpan.FromSeconds(5)) && Installed;
+        lock (_holdSweepGate)
+        {
+            // 待機中に Stop された場合は監視タイマーを残さない。
+            if (_stopRequested || !Installed) return false;
+
+            // 保持キーの取りこぼし（解除イベントの見逃し）を定期的に回収する。
+            _holdWatchdog?.Dispose();
+            _holdWatchdog = new System.Threading.Timer(_ => SweepHolds(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -225,6 +240,7 @@ public sealed class InputEngine : IDisposable
     {
         lock (_holdSweepGate)
         {
+            _stopRequested = true;
             _enabled = false;
             _holdWatchdog?.Dispose();
             _holdWatchdog = null;
