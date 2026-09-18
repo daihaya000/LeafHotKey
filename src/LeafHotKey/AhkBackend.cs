@@ -24,6 +24,9 @@ public sealed class AhkBackend : IDisposable
     /// <summary>このアプリが再起動した回数。</summary>
     public int Restarts { get; private set; }
 
+    /// <summary>直近の通知（トレイと設定画面に出す）。</summary>
+    public string? LastNotice { get; private set; }
+
     /// <summary>実行中のスクリプト。</summary>
     public string ScriptPath { get; private set; } = string.Empty;
 
@@ -51,21 +54,26 @@ public sealed class AhkBackend : IDisposable
         _notice = null;
         return notice;
     }
-
-    /// <summary>スクリプトを起動する。既に起動済みなら何もしない。</summary>
+    /// <summary>スクリプトを起動する。既に同じスクリプトが動いていれば何もしない。</summary>
     public bool Start(BackendSettings settings)
     {
-        if (IsRunning)
-        {
-            Status = "動作中";
-            return true;
-        }
-
         var script = ResolveScript(settings.AhkScript);
         if (script is null)
         {
             Status = "スクリプトが見つかりません";
             return false;
+        }
+
+        if (IsRunning)
+        {
+            // 別のスクリプトへ切り替える指示なら、古いものを止めてから起動し直す。
+            if (string.Equals(ScriptPath, script, StringComparison.OrdinalIgnoreCase))
+            {
+                Status = "動作中";
+                return true;
+            }
+
+            Stop();
         }
 
         var executable = ResolveExecutable(settings.AhkExecutable, script);
@@ -121,6 +129,9 @@ public sealed class AhkBackend : IDisposable
             _process.Dispose();
             _process = null;
             Status = "停止中";
+
+            // 明示的な停止は新しい運用の開始なので、再試行回数を戻す。
+            _restartAttempts = 0;
         }
     }
 
@@ -159,7 +170,7 @@ public sealed class AhkBackend : IDisposable
             if (IsRunning)
             {
                 Restarts++;
-                _notice = $"AutoHotkey を再起動しました（{_restartAttempts} 回目）";
+                SetNotice($"AutoHotkey を再起動しました（{_restartAttempts} 回目）");
             }
 
             return;
@@ -177,7 +188,7 @@ public sealed class AhkBackend : IDisposable
             {
                 Stop();
                 Start(settings);
-                if (IsRunning) _notice = "スクリプトの更新を検出し、AutoHotkey を読み直しました";
+                if (IsRunning) SetNotice("スクリプトの更新を検出し、AutoHotkey を読み直しました");
             }
         }
         catch (IOException)
@@ -189,6 +200,12 @@ public sealed class AhkBackend : IDisposable
     /// <summary>監視の判断（検証で固定できるよう純関数にする）。</summary>
     internal static bool ShouldRestart(bool processExited, bool externalInstanceRunning, bool releasedByHost, int attempts, int maxAttempts)
         => processExited && !externalInstanceRunning && !releasedByHost && attempts < maxAttempts;
+
+    private void SetNotice(string message)
+    {
+        _notice = message;
+        LastNotice = message;
+    }
 
     /// <summary>他の AutoHotkey が動いているか（restart_ahk.bat などが起動した場合）。</summary>
     private static bool ExternalInstanceRunning()

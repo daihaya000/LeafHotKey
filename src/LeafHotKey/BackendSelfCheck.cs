@@ -80,6 +80,25 @@ public static class BackendSelfCheck
             Check("backend.restart.limit", !AhkBackend.ShouldRestart(true, false, false, 3, 3), "再試行の上限で止める");
             Check("backend.restart.alive", !AhkBackend.ShouldRestart(false, false, false, 0, 3), "動いている間は何もしない");
 
+            // 別のスクリプトへ切り替える指示では、古いものを止めて起動し直す。
+            var switchWork = Path.Combine(Path.GetTempPath(), "leafhotkey-backend-switch-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(switchWork);
+            try
+            {
+                var first = Path.Combine(switchWork, "first.ahk");
+                var second = Path.Combine(switchWork, "second.ahk");
+                File.WriteAllText(first, "; first", encoding);
+                File.WriteAllText(second, "; second", encoding);
+                Check(
+                    "backend.switch.script",
+                    AhkBackend.ResolveScript(second) != AhkBackend.ResolveScript(first),
+                    "スクリプトの切り替えを別物として扱う");
+            }
+            finally
+            {
+                Directory.Delete(switchWork, recursive: true);
+            }
+
             // ホスト終了時はプロセスを止めずに手放す。
             backend.Release();
             Check("backend.release", !backend.IsRunning && backend.Status.Contains("ホスト終了", StringComparison.Ordinal), "ホスト終了時は手放して状態を残す");

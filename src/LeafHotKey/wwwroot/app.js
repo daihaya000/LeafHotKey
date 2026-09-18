@@ -689,8 +689,9 @@
 
     const backendDetail = el("backend-detail");
     if (backendDetail) {
+      const note = result.payload.backendNote || "";
       backendDetail.textContent = result.payload.backend === "ahk"
-        ? `PID ${result.payload.backendPid ?? "-"} · 再起動 ${result.payload.backendRestarts ?? 0} 回`
+        ? `PID ${result.payload.backendPid ?? "-"} · 再起動 ${result.payload.backendRestarts ?? 0} 回${note ? " · " + note : ""}`
         : "内蔵フックを設置しています。";
     }
 

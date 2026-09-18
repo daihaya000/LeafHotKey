@@ -162,7 +162,7 @@ public static class Program
                         web = new SettingsServer(
                             store,
                             SettingsServer.DefaultPort,
-                            statusJson: () => StatusJson(state, engine, ahk),
+                            statusJson: () => StatusJson(state, engine, ahk, backend),
                             webRoot: webRoot,
                             onSaved: snapshot => ApplySaved(snapshot));
                         try
@@ -176,7 +176,7 @@ public static class Program
                             web = new SettingsServer(
                                 store,
                                 port: 0,
-                                statusJson: () => StatusJson(state, engine, ahk),
+                                statusJson: () => StatusJson(state, engine, ahk, backend),
                                 webRoot: webRoot,
                                 onSaved: snapshot => ApplySaved(snapshot));
                             web.Start();
@@ -249,14 +249,15 @@ public static class Program
     }
 
     /// <summary>WebUI へ返す現在の状態。</summary>
-    private static string StatusJson(HostState state, InputEngine engine, AhkBackend ahk)
+    private static string StatusJson(HostState state, InputEngine engine, AhkBackend ahk, BackendSettings backend)
         => System.Text.Json.JsonSerializer.Serialize(new
         {
             state = state.State.ToString().ToLowerInvariant(),
             engineInstalled = engine.Installed,
             activeProfile = engine.ActiveProfileName,
-            backend = engine.Installed ? "builtin" : "ahk",
+            backend = backend.Mode == InputBackend.Ahk ? "ahk" : "builtin",
             backendStatus = ahk.Status,
+            backendNote = ahk.LastNotice ?? string.Empty,
             backendScript = ahk.ScriptPath,
             backendPid = ahk.ProcessId,
             backendRestarts = ahk.Restarts,
