@@ -6,7 +6,8 @@
   "backend": {
     "mode": "builtin",
     "ahkScript": "C:/Users/Daichi/OneDrive/AutoHotKey/MySet.ahk",
-    "ahkExecutable": ""
+    "ahkExecutable": "",
+    "generateScript": true
   },
   "gameProtection": {
     "enabled": true,
