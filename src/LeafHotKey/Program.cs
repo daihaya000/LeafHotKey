@@ -115,6 +115,10 @@ public static class Program
             using (var engine = new InputEngine(profiles, disableIme))
             using (var ahk = new AhkBackend())
             {
+                // 不具合の切り分け用に、判定の経過をリングバッファへ残す。
+                var eventLog = new EventLog();
+                engine.Trace = eventLog.Add;
+
                 // 設定画面の内容を AHK 用スクリプトへ書き出してから起動する。
                 void PrepareAhkScript(BackendSettings settings, string json)
                 {
@@ -187,7 +191,8 @@ public static class Program
                             SettingsServer.DefaultPort,
                             statusJson: () => StatusJson(state, engine, ahk, backend),
                             webRoot: webRoot,
-                            onSaved: snapshot => ApplySaved(snapshot));
+                            onSaved: snapshot => ApplySaved(snapshot),
+                            logJson: () => eventLog.ToJson());
                         try
                         {
                             web.Start();
@@ -201,7 +206,8 @@ public static class Program
                                 port: 0,
                                 statusJson: () => StatusJson(state, engine, ahk, backend),
                                 webRoot: webRoot,
-                                onSaved: snapshot => ApplySaved(snapshot));
+                                onSaved: snapshot => ApplySaved(snapshot),
+                                logJson: () => eventLog.ToJson());
                             web.Start();
                         }
                     }

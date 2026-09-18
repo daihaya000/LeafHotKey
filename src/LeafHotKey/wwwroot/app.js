@@ -648,6 +648,21 @@
     }
   }
 
+  async function loadEventLog() {
+    const box = el("event-log");
+    if (!box) return;
+
+    const result = await api("/api/log");
+    const events = result.payload?.events;
+    if (result.status !== 200 || !Array.isArray(events) || events.length === 0) {
+      box.textContent = "（まだ入力はありません）";
+      return;
+    }
+
+    box.textContent = events.slice(-60).join("\n");
+    box.scrollTop = box.scrollHeight;
+  }
+
   async function loadStatus() {
     const result = await api("/api/status");
     if (result.status !== 200 || !result.payload) {
@@ -760,6 +775,7 @@
   }
 
   navItems.forEach((item) => item.addEventListener("click", () => showView(item.dataset.viewTarget)));
+  el("log-refresh").addEventListener("click", loadEventLog);
   el("profile-search").addEventListener("input", renderProfiles);
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => button.addEventListener("click", () => {
     root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
@@ -801,7 +817,7 @@
   el("profile-dialog").addEventListener("close", () => { editingProfileIndex = null; });
 
   el("save").addEventListener("click", save);
-  el("reload").addEventListener("click", () => { loadSettings(); loadStatus(); });
+  el("reload").addEventListener("click", () => { loadSettings(); loadStatus(); loadEventLog(); });
   el("restore").addEventListener("click", restore);
 
   root.dataset.theme = (() => {
@@ -816,5 +832,6 @@
   showView("overview");
   loadSettings();
   loadStatus();
+  loadEventLog();
   window.setInterval(loadStatus, 5000);
 })();

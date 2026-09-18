@@ -52,6 +52,9 @@ public sealed class InputEngineCore
 
     public HotkeyProfile? ActiveProfile { get; private set; }
 
+    /// <summary>判定の経過を残すための記録先（切り分け用）。</summary>
+    public Action<string>? Trace { get; set; }
+
     public IReadOnlyCollection<string> HeldPrefixes => _heldPrefixes.Keys;
 
     public IReadOnlyCollection<string> ActiveHoldModifiers =>
@@ -132,6 +135,7 @@ public sealed class InputEngineCore
     private InputDecision DecideKeyDown(string key, SendModifiers modifiers)
     {
         var profile = ActiveProfile;
+        Trace?.Invoke($"down {key} mods={modifiers} profile={profile?.Id ?? "-"} prefixes=[{string.Join(",", _heldPrefixes.Keys)}] holds=[{string.Join(",", ActiveHoldModifiers)}]");
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
 
         // 1. 押されている前置キーとの組み合わせを最優先する。
@@ -163,6 +167,7 @@ public sealed class InputEngineCore
                 // 離上まで遅延するのは、~ が無い前置キーだけ。
                 var tilde = HasPassthrough(profile, key);
                 _heldPrefixes[key] = tilde;
+                Trace?.Invoke($"prefix {key} held (tilde={tilde})");
                 if (tilde)
                 {
                     Execute(exact, key, firedOnKeyUp: false);
@@ -194,6 +199,7 @@ public sealed class InputEngineCore
     public InputDecision OnKeyUp(string key, SendModifiers modifiers)
     {
         var profile = ActiveProfile;
+        Trace?.Invoke($"up   {key} mods={modifiers} profile={profile?.Id ?? "-"} holds=[{string.Join(",", ActiveHoldModifiers)}]");
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
 
         // 押下を抑止したキーは、解放も抑止して対を揃える。
@@ -239,6 +245,8 @@ public sealed class InputEngineCore
     /// </param>
     private InputDecision Execute(HotkeyRule rule, string key, bool firedOnKeyUp)
     {
+        Trace?.Invoke($"rule {(rule.Trigger.Prefix is { } p ? p + "&" : string.Empty)}{rule.Trigger.Key} {rule.Kind} {(rule.Kind == HotkeyActionKind.Hold ? rule.HoldModifier : string.Join(" | ", rule.SequenceTexts))} (keyUp={firedOnKeyUp})");
+
         switch (rule.Kind)
         {
             case HotkeyActionKind.Send:

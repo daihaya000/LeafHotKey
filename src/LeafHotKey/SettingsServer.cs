@@ -17,6 +17,7 @@ public sealed class SettingsServer : IDisposable
 
     private readonly SettingsStore _store;
     private readonly Func<string>? _statusJson;
+    private readonly Func<string>? _logJson;
     private readonly string? _webRoot;
     private readonly Action<SettingsSnapshot>? _onSaved;
     private readonly TcpListener _listener;
@@ -33,12 +34,14 @@ public sealed class SettingsServer : IDisposable
         int port = 0,
         Func<string>? statusJson = null,
         string? webRoot = null,
-        Action<SettingsSnapshot>? onSaved = null)
+        Action<SettingsSnapshot>? onSaved = null,
+        Func<string>? logJson = null)
     {
         _store = store;
         _statusJson = statusJson;
         _webRoot = webRoot;
         _onSaved = onSaved;
+        _logJson = logJson;
         _listener = new TcpListener(IPAddress.Loopback, port);
     }
 
@@ -223,6 +226,14 @@ public sealed class SettingsServer : IDisposable
             case ("GET", "/api/status"):
             {
                 var body = _statusJson?.Invoke() ?? "{}";
+                await WriteAsync(stream, 200, "application/json; charset=utf-8", body).ConfigureAwait(false);
+                return;
+            }
+
+            case ("GET", "/api/log"):
+            {
+                // 直近の入力イベント。不具合の切り分け用。
+                var body = _logJson?.Invoke() ?? "{\"events\":[]}";
                 await WriteAsync(stream, 200, "application/json; charset=utf-8", body).ConfigureAwait(false);
                 return;
             }

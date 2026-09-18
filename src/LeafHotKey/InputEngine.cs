@@ -99,6 +99,13 @@ public sealed class InputEngine : IDisposable
 
     public string ActiveProfileName => _core.ActiveProfile?.Name ?? string.Empty;
 
+    /// <summary>判定の経過を残すための記録先（切り分け用）。</summary>
+    public Action<string>? Trace
+    {
+        get => _core.Trace;
+        set => _core.Trace = value;
+    }
+
     /// <summary>フックを設置する。設置できない場合は false を返し、動作中と偽らない。</summary>
     public bool Start()
     {
@@ -167,6 +174,7 @@ public sealed class InputEngine : IDisposable
 
             HoldReleases++;
             _core.ReleaseHolds(hold.Key);
+            Trace?.Invoke($"sweep release {hold.Key}");
         }
     }
 

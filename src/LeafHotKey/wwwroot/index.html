@@ -141,6 +141,10 @@
 
           <section class="view" data-view="safety" aria-labelledby="safety-title">
             <div class="page-intro"><p class="eyebrow">安全とライフサイクル</p><h1 id="safety-title">ゲーム保護</h1><p class="intro-copy">検知リスクのあるゲームが起動している間は、入力エンジンを停止して本体を終了します。ゲーム終了後に自動で再起動します。</p></div>
+            <section class="card" aria-labelledby="log-heading">
+              <div class="card-header"><div><h2 id="log-heading">入力ログ</h2><p class="fine">直近のキー判定です。不具合の切り分けに使えます。</p></div><button class="button button-secondary button-small" type="button" id="log-refresh">再読み込み</button></div>
+              <div class="event-log" id="event-log">-</div>
+            </section>
             <div class="card">
               <div class="card-header"><div><h2>自動停止と再起動</h2><p class="fine">フックを解除してから本体を終了します。</p></div><button class="switch" type="button" id="protection-enabled" role="switch" aria-checked="false" aria-label="ゲーム保護を有効にする"></button></div>
               <div class="settings-list" style="margin-top:16px">
