@@ -21,6 +21,8 @@ public sealed class KeySender : IKeySink
     /// <summary>LeafHotKey が注入したイベントであることを示す署名。</summary>
     public const ulong DefaultSignature = 0x4C48_4B45_5901;
 
+    private const uint MapVkToVsc = 0;
+
     private readonly UIntPtr _signature;
 
     public KeySender(ulong signature = DefaultSignature)
@@ -105,6 +107,11 @@ public sealed class KeySender : IKeySink
         var flags = keyUp ? NativeMethods.KeyEventKeyUp : 0u;
         if (NativeMethods.IsExtendedKey(virtualKey)) flags |= NativeMethods.KeyEventExtendedKey;
 
+        // AHK と同じくハードウェアスキャンコードを添えて送る。
+        // スキャンコードを見るアプリ（Blender など）でキーが認識されないのを防ぐ。
+        var scanCode = (ushort)NativeMethods.MapVirtualKeyEx(virtualKey, MapVkToVsc, KeyResolver.CurrentLayout);
+        if (scanCode != 0) flags |= NativeMethods.KeyEventScanCode;
+
         return new NativeMethods.Input
         {
             Type = NativeMethods.InputKeyboard,
@@ -112,8 +119,8 @@ public sealed class KeySender : IKeySink
             {
                 Keyboard = new NativeMethods.KeyboardInput
                 {
-                    VirtualKey = virtualKey,
-                    ScanCode = 0,
+                    VirtualKey = scanCode == 0 ? virtualKey : (ushort)0,
+                    ScanCode = scanCode,
                     Flags = flags,
                     Time = 0,
                     ExtraInfo = _signature,

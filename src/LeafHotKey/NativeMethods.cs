@@ -10,6 +10,9 @@ internal static class NativeMethods
     public const uint KeyEventExtendedKey = 0x0001;
     public const uint KeyEventKeyUp = 0x0002;
 
+    /// <summary>ハードウェアスキャンコードで送る（AHK の SendInput と同じ扱い）。</summary>
+    public const uint KeyEventScanCode = 0x0008;
+
     public const int WhKeyboardLowLevel = 13;
     public const int WhMouseLowLevel = 14;
     public const int HcAction = 0;
