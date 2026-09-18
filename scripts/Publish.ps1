@@ -3,7 +3,7 @@
 LeafHotKey を Windows x64 向けに自己完結発行する。
 
 .DESCRIPTION
-本体と Watcher を同じフォルダーへ発行し、既定設定を添える。
+本体（WebUI とゲーム保護監視）と入力エンジン（LeafHotKeyEngine）を同じフォルダーへ発行し、既定設定を添える。
 .NET ランタイムを同梱するため、AutoHotkey も .NET も入っていない環境でそのまま実行できる。
 
 .PARAMETER OutputDirectory
@@ -30,7 +30,7 @@ if (-not $OutputDirectory) {
 }
 
 $hostProject = Join-Path $repositoryRoot 'src\LeafHotKey\LeafHotKey.csproj'
-$watcherProject = Join-Path $repositoryRoot 'src\LeafHotKeyWatcher\LeafHotKeyWatcher.csproj'
+$engineProject = Join-Path $repositoryRoot 'src\LeafHotKeyEngine\LeafHotKeyEngine.csproj'
 $settingsSource = Join-Path $repositoryRoot 'defaults\settings.json'
 
 if (Test-Path -LiteralPath $OutputDirectory) {
@@ -57,7 +57,7 @@ function Invoke-Publish {
 }
 
 Invoke-Publish -Project $hostProject
-Invoke-Publish -Project $watcherProject
+Invoke-Publish -Project $engineProject
 
 # 既定設定は発行物の中から探せる位置に置く（初回起動時のひな形になる）。
 $defaultsDirectory = Join-Path $OutputDirectory 'defaults'
@@ -66,7 +66,7 @@ Copy-Item -LiteralPath $settingsSource -Destination (Join-Path $defaultsDirector
 
 $expected = @(
     'LeafHotKey.exe',
-    'LeafHotKeyWatcher.exe',
+    'LeafHotKeyEngine.exe',
     'wwwroot\index.html',
     'wwwroot\styles.css',
     'wwwroot\app.js',

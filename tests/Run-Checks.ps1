@@ -3,7 +3,7 @@
 LeafHotKey の自動チェックをまとめて実行する。
 
 .DESCRIPTION
-本体と Watcher をビルドし、すべての自己検証を順に実行する。
+本体（WebUI・ゲーム保護監視）と入力エンジン（LeafHotKeyEngine）をビルドし、すべての自己検証を順に実行する。
 1 件でも失敗したら終了コード 1 を返す。
 検証用のキー送信はフックで破棄されるため、他のアプリへは入力されない。
 
@@ -23,10 +23,10 @@ $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $hostProject = Join-Path $repositoryRoot 'src\LeafHotKey\LeafHotKey.csproj'
-$watcherProject = Join-Path $repositoryRoot 'src\LeafHotKeyWatcher\LeafHotKeyWatcher.csproj'
+$engineProject = Join-Path $repositoryRoot 'src\LeafHotKeyEngine\LeafHotKeyEngine.csproj'
 $settings = Join-Path $repositoryRoot 'defaults\settings.json'
 $hostExe = Join-Path $repositoryRoot "src\LeafHotKey\bin\$Configuration\net8.0-windows\LeafHotKey.exe"
-$watcherExe = Join-Path $repositoryRoot "src\LeafHotKeyWatcher\bin\$Configuration\net8.0-windows\LeafHotKeyWatcher.exe"
+$engineExe = Join-Path $repositoryRoot "src\LeafHotKeyEngine\bin\$Configuration\net8.0-windows\LeafHotKeyEngine.exe"
 
 function Invoke-Build {
     param([string] $Project)
@@ -38,16 +38,16 @@ function Invoke-Build {
     }
 }
 
-# 本体は GUI 実行ファイルでコンソールへ出力できないため、結果はレポートファイルで受け取る。
-function Invoke-HostCheck {
-    param([string] $Mode, [switch] $WithSettings)
+# 本体もエンジンも GUI 実行ファイルでコンソールへ出力できないため、結果はレポートファイルで受け取る。
+function Invoke-GuiCheck {
+    param([string] $Exe, [string] $Mode, [switch] $WithSettings)
 
     $report = Join-Path ([System.IO.Path]::GetTempPath()) ("leafhotkey-runchecks-" + [guid]::NewGuid().ToString('N') + ".txt")
     $arguments = @($Mode, $report)
     if ($WithSettings) { $arguments += $settings }
 
     try {
-        $process = Start-Process -FilePath $hostExe -ArgumentList $arguments -PassThru -WindowStyle Hidden
+        $process = Start-Process -FilePath $Exe -ArgumentList $arguments -PassThru -WindowStyle Hidden
         if (-not $process.WaitForExit(60000)) {
             $process.Kill()
             return [pscustomobject]@{ Name = $Mode; Pass = 0; Fail = 0; ExitCode = -1; Note = 'タイムアウト' }
@@ -69,48 +69,24 @@ function Invoke-HostCheck {
     }
 }
 
-# Watcher はコンソールアプリなので標準出力をそのまま数える。
-function Invoke-WatcherCheck {
-    param([string] $Mode, [switch] $WithSettings)
-
-    $arguments = @($Mode)
-    if ($WithSettings) { $arguments += $settings }
-
-    # ネイティブコマンドの標準エラー出力を終了エラーにしない（想定内の警告を含むため）。
-    $previousPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $output = & $watcherExe @arguments 2>&1
-        $exitCode = $LASTEXITCODE
-    }
-    finally {
-        $ErrorActionPreference = $previousPreference
-    }
-
-    return [pscustomobject]@{
-        Name     = "watcher $Mode"
-        Pass     = ($output | Where-Object { $_ -cmatch '^PASS ' }).Count
-        Fail     = ($output | Where-Object { $_ -cmatch '^FAIL ' }).Count
-        ExitCode = $exitCode
-        Note     = ''
-    }
-}
-
 Invoke-Build -Project $hostProject
-Invoke-Build -Project $watcherProject
+Invoke-Build -Project $engineProject
 
 $results = @()
-$results += Invoke-HostCheck -Mode '--check'
-$results += Invoke-HostCheck -Mode '--check-profiles' -WithSettings
-$results += Invoke-HostCheck -Mode '--check-backend'
-$results += Invoke-HostCheck -Mode '--check-send'
-$results += Invoke-HostCheck -Mode '--check-engine' -WithSettings
-$results += Invoke-HostCheck -Mode '--check-hook'
-$results += Invoke-HostCheck -Mode '--check-coverage' -WithSettings
-$results += Invoke-HostCheck -Mode '--check-settings' -WithSettings
-$results += Invoke-HostCheck -Mode '--check-server' -WithSettings
-$results += Invoke-WatcherCheck -Mode '--check'
-$results += Invoke-WatcherCheck -Mode '--check-lifecycle' -WithSettings
+
+# 入力エンジン（フック・送信・AHK）。
+$results += Invoke-GuiCheck -Exe $engineExe -Mode '--check'
+$results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-hook'
+$results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-engine' -WithSettings
+$results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-send'
+$results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-backend'
+$results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-coverage' -WithSettings
+
+# 本体（設定画面・ゲーム保護監視）。
+$results += Invoke-GuiCheck -Exe $hostExe -Mode '--check-profiles' -WithSettings
+$results += Invoke-GuiCheck -Exe $hostExe -Mode '--check-settings' -WithSettings
+$results += Invoke-GuiCheck -Exe $hostExe -Mode '--check-server' -WithSettings
+$results += Invoke-GuiCheck -Exe $hostExe -Mode '--check-watch' -WithSettings
 
 $results | Format-Table -AutoSize | Out-String -Width 120 | Write-Host
 

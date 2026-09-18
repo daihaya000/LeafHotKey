@@ -92,16 +92,16 @@
 
 | コマンド | 確認内容 | 直近の結果 |
 | --- | --- | --- |
-| `LeafHotKey.exe --check <report>` | 制御チャネル、多重起動防止、終了理由の区別 | 18 PASS |
-| `--check-profiles <report> [settings]` | 台帳の読込みと送信文字列の解析 | 25 PASS（251ルール） |
+| `LeafHotKeyEngine.exe --check <report>` | 制御チャネル、多重起動防止、終了理由の区別 | 18 PASS |
 | `--check-send <report>` | SendInput の実送信と配列解決 | 13 PASS |
-| `--check-engine <report> [settings]` | 判定、前置キー、保持キーの解放、IME 設定 | 35 PASS |
-| `--check-hook <report>` | 実フック経由の変換・抑止・停止時解放 | 12 PASS |
+| `--check-engine <report> [settings]` | 判定、前置キー、保持キーの解放、IME 設定 | 43 PASS |
+| `--check-hook <report>` | 実フック経由の変換・抑止・停止時解放 | 14 PASS |
+| `--check-backend <report>` | AHK バックエンドの解決、再起動判断、スクリプト追従 | 30 PASS |
 | `--check-coverage <report> [settings]` | 全 send / hold ルールを発火させて台帳と照合 | 243 件、不一致 0 |
-| `--check-settings <report> [settings]` | 保存、競合・不正拒否、破損からの復旧 | 30 PASS |
-| `--check-server <report> [settings]` | HTTP 配信、Host/Origin 検証、保存反映、アイコン配信 | 30 PASS |
-| `LeafHotKeyWatcher.exe --check` | Watcher の多重起動防止と本体未到達時の扱い | 4 PASS |
-| `--check-lifecycle [settings]` | 退避・待機・再出現・復帰・失敗時の停止・本体パス解決 | 23 PASS |
+| `LeafHotKey.exe --check-profiles <report> [settings]` | 台帳の読込みと送信文字列の解析 | 25 PASS（251ルール） |
+| `--check-settings <report> [settings]` | 保存、競合・不正拒否、破損からの復旧 | 31 PASS |
+| `--check-server <report> [settings]` | HTTP 配信、Host/Origin 検証、保存反映、アイコン配信 | 31 PASS |
+| `--check-watch <report> [settings]` | 退避・待機・再出現・復帰・失敗時の停止・エンジン解決 | 25 PASS |
 
 ## 7. 意図的な差分（AHK と異なる点）
 

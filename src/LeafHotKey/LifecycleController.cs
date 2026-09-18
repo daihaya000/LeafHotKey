@@ -1,8 +1,6 @@
-using LeafHotKey;
+namespace LeafHotKey;
 
-namespace LeafHotKeyWatcher;
-
-/// <summary>Watcher の状態。</summary>
+/// <summary>ゲーム保護の監視状態。</summary>
 public enum LifecycleState
 {
     /// <summary>本体が動作中。危険プロセスを監視している。</summary>
@@ -18,7 +16,7 @@ public enum LifecycleState
     Stopped,
 }
 
-/// <summary>Watcher が停止した理由。</summary>
+/// <summary>監視を停止した理由。</summary>
 public enum StopCause
 {
     None,
@@ -33,7 +31,7 @@ public enum StopCause
 /// </summary>
 public sealed class LifecycleController
 {
-    private readonly GameProtectionSettings _settings;
+    private volatile GameProtectionSettings _settings;
     private readonly GameMonitor _monitor;
     private readonly IHostControl _host;
     private readonly int _maxStartAttempts;
@@ -60,6 +58,25 @@ public sealed class LifecycleController
     /// <summary>直近の遷移理由。ログとトレイ表示に使う。</summary>
     public string LastMessage { get; private set; } = string.Empty;
 
+    /// <summary>監視間隔。設定画面で変更された場合は保存後に反映される。</summary>
+    public int PollIntervalMs => _settings.PollIntervalMs;
+
+    /// <summary>保存されたゲーム保護設定を反映する。</summary>
+    public void UpdateSettings(GameProtectionSettings settings) => _settings = settings;
+
+    /// <summary>
+    /// 入力エンジンが再び応答するようになったら監視を戻す。
+    /// 利用者がトレイや別経路でエンジンを起動し直した場合も、ゲーム保護を有効なままに保つ。
+    /// </summary>
+    public void ResumeWatching()
+    {
+        if (State != LifecycleState.Stopped) return;
+
+        State = LifecycleState.HostRunning;
+        StopCause = StopCause.None;
+        LastMessage = "監視を再開しました。";
+    }
+
     /// <summary>監視ループの 1 ステップ。時刻は呼び出し側から渡し、検証で固定できるようにする。</summary>
     public void Tick(DateTimeOffset now)
     {
@@ -75,6 +92,8 @@ public sealed class LifecycleController
                 TickWaitingResumeDelay(now);
                 break;
             case LifecycleState.Stopped:
+                // 利用者が入力エンジンを起動し直したら、監視を再開する。
+                if (_host.IsRunning()) ResumeWatching();
                 break;
         }
     }
@@ -86,7 +105,7 @@ public sealed class LifecycleController
         var triggers = _monitor.Running(_settings.StopTriggerProcessNames);
         if (triggers.Count == 0)
         {
-            // 危険プロセスが無いのに本体が消えた場合は手動終了とみなし、自動復帰しない。
+            // 危険プロセスが無いのに本体（入力エンジン）が消えた場合は手動終了とみなし、自動復帰しない。
             if (!_host.IsRunning())
             {
                 State = LifecycleState.Stopped;

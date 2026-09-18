@@ -23,7 +23,7 @@ AutoHotkey の `MySet.ahk` を Windows ネイティブアプリへ移行し、�
 ## 3. 基本方針
 
 - まずゲーム保護とライフサイクルを完成させ、その後に入力割り当てを移植する。
-- 本体とゲーム終了待機用Watcherを分離する。
+- WebUI・ゲーム保護監視・設定ストアを持つ本体（LeafHotKey.exe）と、入力フックを持つ入力エンジン（LeafHotKeyEngine.exe）を分離する。ゲーム保護で退避するのは入力エンジンだけで、設定画面は生かし続ける。
 - 入力フック、`SendInput`、DLL注入、ドライバー、メモリ操作は行わない。
 - ゲーム中に入力エンジンを動かさないことで検知リスクへの露出時間を減らす。ただし検知ゼロは保証しない。
 - 設定の正本は本体側のJSONとし、WebUIの状態を正本にしない。
@@ -32,30 +32,33 @@ AutoHotkey の `MySet.ahk` を Windows ネイティブアプリへ移行し、�
 ## 4. 全体構成
 
 ```text
-LeafHotKey.exe
+LeafHotKey.exe（本体）
 ├─ NotifyIcon / トレイメニュー
 ├─ WebUIサーバー（127.0.0.1のみ）
 ├─ 設定ストア
-└─ 入力エンジン
+├─ ゲーム保護の対象プロセス監視
+└─ 入力エンジンの起動・監督
 
-LeafHotKeyWatcher.exe
-├─ 対象プロセス監視
-├─ ゲーム終了待機
-└─ LeafHotKey.exe再起動
+LeafHotKeyEngine.exe（入力エンジン）
+├─ キーボード／マウスフックと入力変換
+├─ AutoHotkeyバックエンド
+└─ 制御チャネル（STATUS / PAUSE / RESUME / SHUTDOWN / RELOAD）
 ```
 
-### 本体終了時の順序
+### ゲーム保護の順序
 
 ```text
-危険プロセス検知
+危険プロセス検知（本体）
+→ 入力エンジンへ退避要求
 → 新規入力停止
 → 保持中の修飾キーを解放
 → キーボード／マウスフック解除
-→ Watcher起動確認
-→ 本体終了
+→ 入力エンジン終了（本体とWebUIは残る）
+→ 対象プロセスの終了待機
+→ 停止トリガ再確認の上で入力エンジンを再起動
 ```
 
-Watcherは入力フック、`SendInput`、WebUIを持たない。ゲーム終了後は対象プロセスが消えたことを再確認し、本体を起動してから自身を終了する。
+入力エンジンは入力フックと`SendInput`を持ち、WebUIを持たない。本体はフックを持たない。ゲーム中も設定画面は開ける。
 
 ## 5. Phase 0 — 仕様固定・移行台帳
 
@@ -101,68 +104,67 @@ Watcherは入力フック、`SendInput`、WebUIを持たない。ゲーム終了
 - `src/LeafHotKey/Program.cs`
 - `src/LeafHotKey/TrayApplication.cs`
 - `src/LeafHotKey/SingleInstance.cs`
-- `src/LeafHotKeyWatcher/LeafHotKeyWatcher.csproj`
-- `src/LeafHotKeyWatcher/Program.cs`
+- `src/LeafHotKeyEngine/LeafHotKeyEngine.csproj`
+- `src/LeafHotKeyEngine/Program.cs`
 
 ### 作業
 
 - C#／.NETのトレイ常駐本体を作る。
-- 本体とWatcherの多重起動をMutexで防止する。
-- 本体とWatcherの制御通信を、同一ユーザー限定の名前付きパイプで行う。
-- 本体の起動、終了、手動一時停止を実装する。
+- 本体と入力エンジンの多重起動をMutexで防止する。
+- 本体と入力エンジンの制御通信を、同一ユーザー限定の名前付きパイプで行う。
+- 本体の起動、入力エンジンの起動・停止、手動一時停止を実装する。
 - WebUIや入力フックがなくても本体が正常終了できるようにする。
-- Watcherの起動確認が取れない場合は、本体を終了せず停止状態で残す。
 
 ### 完了条件
 
 - トレイアイコンと終了メニューが表示される。
 - 二重起動が発生しない。
 - 手動終了では自動再起動しない。
-- Watcherとの接続断をエラーとして扱える。
+- 入力エンジンとの接続断をエラーとして扱える。
 
 ## 7. Phase 2 — ゲーム保護・終了・復帰
 
 ### 新規ファイル
 
-- `src/LeafHotKeyWatcher/GameMonitor.cs`
-- `src/LeafHotKeyWatcher/LifecycleController.cs`
-- `src/LeafHotKeyWatcher/GameLauncher.cs`
-- `src/LeafHotKeyWatcher/ProcessSnapshot.cs`
+- `src/LeafHotKey/GameMonitor.cs`
+- `src/LeafHotKey/LifecycleController.cs`
+- `src/LeafHotKey/EngineControl.cs`
+- `src/LeafHotKey/HostSupervisor.cs`
 
 ### 作業
 
 - `MySet.ahk:61–75` のゲーム検知をネイティブ化する。
 - `restart_ahk.bat:4–40` の待機・再起動をネイティブ化する。
-- 危険プロセス検知時に、ゲーム自体を終了せずLeafHotKeyだけを停止する。
+- 危険プロセス検知時に、ゲーム自体を終了せず入力エンジンだけを停止する。
 - 複数の対象プロセスがある場合は、すべての復帰条件を満たすまで再起動しない。
 - 対象プロセスが終了した後、待機時間を置いて再確認する。
 - 待機中に対象プロセスが再出現した場合は、待機をリセットする。
-- 本体の再起動失敗時は再試行するが、無限起動ループは防止する。
+- 入力エンジンの再起動失敗時は再試行するが、無限起動ループは防止する。
 - 手動停止とゲーム検知による自動停止を区別する。
 - `launch_arc_raiders.bat` のAHK終了・バッチ呼び出しを、ネイティブ起動経路へ置き換える。
 
 ### 安全条件
 
-- フック解除とキー解放が完了する前に本体を終了しない。
-- Watcherは対象プロセスが残っている間、本体を起動しない。
+- フック解除とキー解放が完了する前にエンジンを終了させない。
+- 対象プロセスが残っている間は、入力エンジンを起動しない。
 - 再起動直前にも対象プロセスを再確認する。
 - プロセス監視失敗時は安全側として入力を有効化しない。
 
 ### 完了条件
 
-- ダミーの監視対象プロセスで、検知→本体終了→終了待機→本体再起動を確認できる。
-- 複数対象、再出現、Watcher再起動失敗、手動停止を確認できる。
+- ダミーの監視対象プロセスで、検知→エンジン終了→終了待機→エンジン再起動を確認できる。
+- 複数対象、再出現、再起動失敗、手動停止を確認できる。
 - ゲームプロセスを強制終了しない。
 
 ## 8. Phase 3 — AHK互換入力エンジン
 
 ### 新規ファイル
 
-- `src/LeafHotKey/InputEngine.cs`
-- `src/LeafHotKey/KeySender.cs`
-- `src/LeafHotKey/ModifierState.cs`
-- `src/LeafHotKey/NativeMethods.cs`
-- `src/LeafHotKey/ProfileMatcher.cs`
+- `src/LeafHotKeyEngine/InputEngine.cs`
+- `src/LeafHotKeyEngine/KeySender.cs`
+- `src/LeafHotKeyEngine/ModifierState.cs`
+- `src/LeafHotKeyEngine/NativeMethods.cs`
+- `src/LeafHotKeyEngine/ProfileMatcher.cs`
 
 ### 移植順
 
@@ -275,11 +277,11 @@ Watcherは入力フック、`SendInput`、WebUIを持たない。ゲーム終了
 ## 12. リスクと未決事項
 
 - C#化しても低レベルフックや`SendInput`の検知リスクはゼロにならない。
-- 自動復帰のため、Watcherはゲーム中も残る。Watcherすら残さない場合は、手動起動またはWindowsタスクスケジューラ方式が必要になる。
+- 自動復帰のため、ゲーム中も本体（WebUI）は残る。プロセスを残したくない場合は本体を使わず、入力エンジンだけを手動で起動・終了する。
 - `EAAntiCheat.GameService.exe`などが常駐する環境では、復帰条件を実測で決める必要がある。
 - `IME_SET`のDLL呼び出しとハンドル型は実機で確認し、AHKの記述を盲目的に転記しない。
 - 管理者権限のアプリへの入力送信にはWindowsの制約がある。常時管理者実行は既定にしない。
-- 本体・Watcher・WebUIのいずれかが異常終了した場合の復旧手順を配布前に確認する。
+- 本体・入力エンジン・WebUIのいずれかが異常終了した場合の復旧手順を配布前に確認する。
 
 ## 13. 対象外
 

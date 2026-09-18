@@ -1,11 +1,11 @@
-using LeafHotKey;
+using System.Text;
 
-namespace LeafHotKeyWatcher;
+namespace LeafHotKey;
 
-/// <summary>GUI や実ゲームに依存せず、Watcher のライフサイクル判断を検証する。</summary>
+/// <summary>GUI や実ゲームに依存せず、ゲーム保護のライフサイクル判断を検証する。</summary>
 public static class WatcherSelfCheck
 {
-    /// <summary>本体操作の差し替え実装。呼び出し回数と成否を制御する。</summary>
+    /// <summary>入力エンジン操作の差し替え実装。呼び出し回数と成否を制御する。</summary>
     private sealed class FakeHost : IHostControl
     {
         public bool Running { get; set; } = true;
@@ -33,14 +33,18 @@ public static class WatcherSelfCheck
         }
     }
 
-    public static int Run(string? settingsPath)
+    public static int Run(string? reportPath = null, string? settingsPath = null)
     {
+        var path = reportPath ?? Path.Combine(Path.GetTempPath(), "leafhotkey-watchcheck.txt");
+        var encoding = new UTF8Encoding(false);
         var failures = 0;
+
+        File.WriteAllText(path, string.Empty, encoding);
 
         void Check(string name, bool ok, string detail)
         {
             if (!ok) failures++;
-            Console.WriteLine($"{(ok ? "PASS" : "FAIL")} {name}: {detail}");
+            File.AppendAllText(path, $"{(ok ? "PASS" : "FAIL")} {name}: {detail}{Environment.NewLine}", encoding);
         }
 
         var running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -64,7 +68,7 @@ public static class WatcherSelfCheck
         running.Add("GameA.exe");
         controller.Tick(now);
         Check("detect", controller.State == LifecycleState.WaitingGameExit, "検知したら退避状態へ移る");
-        Check("detect.shutdown", host.ShutdownCalls == 1 && !host.Running, "本体へ退避を要求する");
+        Check("detect.shutdown", host.ShutdownCalls == 1 && !host.Running, "入力エンジンへ退避を要求する");
         Check("detect.nokill", running.Contains("GameA.exe"), "ゲームプロセスは終了させない");
 
         now = now.AddSeconds(5);
@@ -95,7 +99,7 @@ public static class WatcherSelfCheck
         now = now.AddSeconds(2);
         controller.Tick(now);
         Check("resume", controller.State == LifecycleState.HostRunning, "条件が揃えば復帰する");
-        Check("resume.start", host.StartCalls == 1 && host.Running, "本体を 1 回だけ起動する");
+        Check("resume.start", host.StartCalls == 1 && host.Running, "入力エンジンを 1 回だけ起動する");
 
         // 手動終了は自動復帰しない。
         var manualHost = new FakeHost { Running = false };
@@ -104,6 +108,22 @@ public static class WatcherSelfCheck
         Check("manual.stop", manual.State == LifecycleState.Stopped && manual.StopCause == StopCause.ManualExit, "手動終了を停止として扱う");
         manual.Tick(now.AddMinutes(1));
         Check("manual.norestart", manualHost.StartCalls == 0, "手動終了後に再起動しない");
+
+        // 本体から再開を指示された場合は監視へ戻る。
+        manual.ResumeWatching();
+        Check("manual.rearm", manual.State == LifecycleState.HostRunning && manual.StopCause == StopCause.None, "見直し指示で監視を再開する");
+
+        // 入力エンジンが動き出したら、停止状態からも監視を再開する。
+        var recoveredHost = new FakeHost { Running = false };
+        var recovered = new LifecycleController(settings, new GameMonitor(_ => false), recoveredHost);
+        recovered.Tick(now);
+        Check("recovered.stop", recovered.State == LifecycleState.Stopped, "エンジンが消えている間は停止として扱う");
+        recoveredHost.Running = true;
+        recovered.Tick(now.AddSeconds(1));
+        Check("recovered.rearm", recovered.State == LifecycleState.HostRunning, "エンジンが戻れば監視を再開する");
+        recoveredHost.Running = false;
+        recovered.Tick(now.AddSeconds(2));
+        Check("recovered.restop", recovered.State == LifecycleState.Stopped, "再び停止したら停止として扱う");
 
         // 退避に失敗したら保護済みとして扱わない。
         var failingHost = new FakeHost { ShutdownSucceeds = false };
@@ -136,20 +156,31 @@ public static class WatcherSelfCheck
             startFail.State == LifecycleState.Stopped && startFail.StopCause == StopCause.StartFailed && startFailHost.StartCalls == 3,
             "起動失敗は上限 3 回で停止する");
 
+        // 保存された設定の反映。
+        controller.UpdateSettings(new GameProtectionSettings
+        {
+            Enabled = false,
+            PollIntervalMs = 500,
+            ResumeDelayMs = 1000,
+            StopTriggerProcessNames = new[] { "GameA.exe" },
+            ResumeProcessNames = Array.Empty<string>(),
+        });
+        Check("settings.update", controller.PollIntervalMs == 500, "保存された監視間隔を反映する");
+
         // 実プロセス判定。
         var selfImage = System.Diagnostics.Process.GetCurrentProcess().ProcessName + ".exe";
         Check("probe.self", GameMonitor.ProcessExists(selfImage), $"実行中プロセス {selfImage} を検出する");
         Check("probe.absent", !GameMonitor.ProcessExists("leafhotkey-absent-process.exe"), "存在しないプロセスは検出しない");
 
         // 既定設定の読み込み。
-        var path = settingsPath ?? FindDefaultSettings();
-        if (path is null)
+        var settingsFile = settingsPath ?? FindDefaultSettings();
+        if (settingsFile is null)
         {
             Check("settings.load", false, "defaults/settings.json が見つからない");
         }
         else
         {
-            var loaded = GameProtectionSettings.Load(path);
+            var loaded = GameProtectionSettings.Load(settingsFile);
             Check("settings.load", loaded.StopTriggerProcessNames.Count == 6 && loaded.ResumeProcessNames.Count == 3, "停止6種・復帰3種を読み込む");
             Check("settings.poll", loaded.PollIntervalMs == 1000 && loaded.ResumeDelayMs == 1000, "監視間隔と待機時間を読み込む");
         }
@@ -175,32 +206,32 @@ public static class WatcherSelfCheck
 
         Check("settings.invalid", rejected, "保護有効なのに停止対象が空の設定を拒否する");
 
-        // 本体の場所は、発行物（同じフォルダー）と開発時のビルド出力の両方を解決する。
-        var probeRoot = Path.Combine(Path.GetTempPath(), "leafhotkey-watcher-probe-" + Guid.NewGuid().ToString("N"));
+        // 入力エンジンの場所は、発行物（同じフォルダー）と開発時のビルド出力の両方を解決する。
+        var probeRoot = Path.Combine(Path.GetTempPath(), "leafhotkey-engine-probe-" + Guid.NewGuid().ToString("N"));
         try
         {
             var publishedDirectory = Path.Combine(probeRoot, "published");
             Directory.CreateDirectory(publishedDirectory);
-            var publishedHost = Path.Combine(publishedDirectory, "LeafHotKey.exe");
-            File.WriteAllText(publishedHost, string.Empty);
-            Check("hostpath.published", Program.ResolveHostPath(publishedDirectory) == publishedHost, "同じフォルダーに本体があればそれを選ぶ");
+            var publishedEngine = Path.Combine(publishedDirectory, "LeafHotKeyEngine.exe");
+            File.WriteAllText(publishedEngine, string.Empty);
+            Check("enginepath.published", Program.ResolveEnginePath(publishedDirectory) == publishedEngine, "同じフォルダーにエンジンがあればそれを選ぶ");
 
-            var devDirectory = Path.Combine(probeRoot, "src", "LeafHotKeyWatcher", "bin", "Release", "net8.0-windows");
-            var devHost = Path.Combine(probeRoot, "src", "LeafHotKey", "bin", "Release", "net8.0-windows", "LeafHotKey.exe");
+            var devDirectory = Path.Combine(probeRoot, "src", "LeafHotKey", "bin", "Release", "net8.0-windows");
+            var devEngine = Path.Combine(probeRoot, "src", "LeafHotKeyEngine", "bin", "Release", "net8.0-windows", "LeafHotKeyEngine.exe");
             Directory.CreateDirectory(devDirectory);
-            Directory.CreateDirectory(Path.GetDirectoryName(devHost)!);
-            File.WriteAllText(devHost, string.Empty);
-            Check("hostpath.development", Program.ResolveHostPath(devDirectory) == devHost, "開発時のビルド出力から本体を解決する");
+            Directory.CreateDirectory(Path.GetDirectoryName(devEngine)!);
+            File.WriteAllText(devEngine, string.Empty);
+            Check("enginepath.development", Program.ResolveEnginePath(devDirectory) == devEngine, "開発時のビルド出力から入力エンジンを解決する");
         }
         finally
         {
             Directory.Delete(probeRoot, recursive: true);
         }
 
-        var resolvedHost = Program.ResolveHostPath(AppContext.BaseDirectory);
-        Check("hostpath.deployment", File.Exists(resolvedHost), $"現在の配置で本体を解決できる（{resolvedHost}）");
+        var resolvedEngine = Program.ResolveEnginePath(AppContext.BaseDirectory);
+        Check("enginepath.deployment", File.Exists(resolvedEngine), $"現在の配置で入力エンジンを解決できる（{resolvedEngine}）");
 
-        Console.WriteLine($"failures={failures}");
+        File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);
         return failures == 0 ? 0 : 1;
     }
 

@@ -11,6 +11,10 @@ namespace LeafHotKey;
 public sealed class ControlServer : IDisposable
 {
     private readonly HostState _state;
+    private readonly Func<string>? _statusJson;
+    private readonly Func<string>? _logJson;
+    private readonly Func<bool>? _reload;
+    private readonly Func<bool>? _restartBackend;
     private readonly CancellationTokenSource _cts = new();
     private readonly string _pipeName;
     private readonly string _ownerSid;
@@ -20,15 +24,34 @@ public sealed class ControlServer : IDisposable
 
     private static readonly TimeSpan ClientTimeout = TimeSpan.FromSeconds(5);
 
-    public ControlServer(HostState state, string? pipeName = null)
+    public ControlServer(
+        HostState state,
+        string? pipeName = null,
+        Func<string>? statusJson = null,
+        Func<string>? logJson = null,
+        Func<bool>? reload = null,
+        Func<bool>? restartBackend = null)
     {
         _state = state;
         _pipeName = pipeName ?? ControlProtocol.PipeName;
+        _statusJson = statusJson;
+        _logJson = logJson;
+        _reload = reload;
+        _restartBackend = restartBackend;
         _ownerSid = WindowsIdentity.GetCurrent().User?.Value ?? string.Empty;
     }
 
+    /// <summary>
+    /// コマンド処理を差し替える。戻り値が null 以外ならそれを応答に使う。
+    /// 本体側は、入力エンジン（別プロセス）へ転送するために使う。
+    /// </summary>
+    public Func<string, string?>? Override { get; set; }
+
     /// <summary>終了要求を受けたときに発火する。実際の終了処理は呼び出し側が行う。</summary>
     public event Action? ShutdownRequested;
+
+    /// <summary>終了要求として扱う。コマンド転送側（本体）から終了処理を促すために使う。</summary>
+    public void RequestShutdown() => ShutdownRequested?.Invoke();
 
     public void Start()
     {
@@ -158,6 +181,9 @@ public sealed class ControlServer : IDisposable
 
     internal string Handle(string command)
     {
+        // 転送先を持つ本体では、応答が返った時点で既定動作を行わない。
+        if (Override is { } custom && custom(command) is { } customResponse) return customResponse;
+
         var parts = command.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var verb = parts.Length > 0 ? parts[0] : string.Empty;
         var argument = parts.Length > 1 ? parts[1].ToUpperInvariant() : string.Empty;
@@ -167,7 +193,25 @@ public sealed class ControlServer : IDisposable
             case ControlProtocol.Ping:
                 return ControlProtocol.Pong;
             case ControlProtocol.Status:
+                // WebUI は入力エンジン内の状態を必要とする。
+                if (argument == ControlProtocol.StatusJson)
+                {
+                    return _statusJson is null
+                        ? ControlProtocol.Error("UNAVAILABLE")
+                        : ControlProtocol.Ok(_statusJson());
+                }
+
                 return ControlProtocol.Ok(_state.State.ToString().ToUpperInvariant());
+            case ControlProtocol.Log:
+                return _logJson is null
+                    ? ControlProtocol.Error("UNAVAILABLE")
+                    : ControlProtocol.Ok(_logJson());
+            case ControlProtocol.Reload:
+                if (_reload is null) return ControlProtocol.Error("UNAVAILABLE");
+                return _reload() ? ControlProtocol.Ok("RELOADED") : ControlProtocol.Error("RELOAD_FAILED");
+            case ControlProtocol.RestartBackend:
+                if (_restartBackend is null) return ControlProtocol.Error("UNAVAILABLE");
+                return _restartBackend() ? ControlProtocol.Ok("RESTARTED") : ControlProtocol.Error("RESTART_FAILED");
             case ControlProtocol.Pause:
                 return _state.Pause()
                     ? ControlProtocol.Ok("PAUSED")

@@ -13,7 +13,7 @@ public enum RuntimeState
     ShuttingDown,
 }
 
-/// <summary>本体の終了理由。Watcher が自動再起動の可否を判断するために使う。</summary>
+/// <summary>本体の終了理由。本体が自動再起動の可否を判断するために使う。</summary>
 public enum ExitReason
 {
     /// <summary>まだ終了していない。</summary>

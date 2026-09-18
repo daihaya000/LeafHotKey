@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace LeafHotKeyWatcher;
+namespace LeafHotKey;
 
 /// <summary>
 /// 対象プロセスの有無だけを判定する。ゲームプロセスを終了させる操作は一切行わない。

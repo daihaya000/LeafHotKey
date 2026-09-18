@@ -1,8 +1,12 @@
-using System.Net.Sockets;
+using System.Diagnostics;
 using System.Windows.Forms;
 
 namespace LeafHotKey;
 
+/// <summary>
+/// 本体（トレイ常駐）。設定画面（WebUI）を配信し、ゲーム保護の監視と入力エンジンの起動・停止を担当する。
+/// 入力変換そのものは LeafHotKeyEngine.exe が行うため、ゲーム保護でエンジンが退避してもこの画面は動き続ける。
+/// </summary>
 public static class Program
 {
     /// <summary>終了コード: 0 正常 / 1 検証失敗 / 2 多重起動 / 3 本体へ接続できない。</summary>
@@ -18,8 +22,6 @@ public static class Program
 
         switch (mode)
         {
-            case "--check":
-                return SelfCheck.Run(args.Length > 1 ? args[1] : null);
             case "--check-server":
                 return ServerSelfCheck.Run(
                     args.Length > 1 ? args[1] : null,
@@ -28,24 +30,14 @@ public static class Program
                 return SettingsSelfCheck.Run(
                     args.Length > 1 ? args[1] : null,
                     args.Length > 2 ? args[2] : null);
-            case "--check-coverage":
-                return CoverageSelfCheck.Run(
-                    args.Length > 1 ? args[1] : null,
-                    args.Length > 2 ? args[2] : null);
-            case "--check-hook":
-                return HookSelfCheck.Run(args.Length > 1 ? args[1] : null);
-            case "--check-engine":
-                return EngineSelfCheck.Run(
-                    args.Length > 1 ? args[1] : null,
-                    args.Length > 2 ? args[2] : null);
-            case "--check-send":
-                return SendSelfCheck.Run(args.Length > 1 ? args[1] : null);
             case "--check-profiles":
                 return ProfileSelfCheck.Run(
                     args.Length > 1 ? args[1] : null,
                     args.Length > 2 ? args[2] : null);
-            case "--check-backend":
-                return BackendSelfCheck.Run(args.Length > 1 ? args[1] : null);
+            case "--check-watch":
+                return WatcherSelfCheck.Run(
+                    args.Length > 1 ? args[1] : null,
+                    args.Length > 2 ? args[2] : null);
             case "--status":
                 return SendToHost(ControlProtocol.Status);
             case "--pause":
@@ -55,7 +47,7 @@ public static class Program
             case "--shutdown":
                 return SendToHost(ControlProtocol.Shutdown);
             default:
-                return RunTray();
+                return RunHost();
         }
     }
 
@@ -68,200 +60,248 @@ public static class Program
             : ExitOk;
     }
 
-    private static int RunTray()
+    private static int RunHost()
     {
         var restartRequested = false;
 
-        // 再起動する本体は、このブロックを抜けて Mutex・フック・WebUI を全て解放してから起動する。
+        // 再起動する本体は、このブロックを抜けて Mutex・WebUI・監視を全て解放してから起動する。
         using (var single = SingleInstance.TryAcquire("host"))
         {
             if (!single.Acquired) return ExitAlreadyRunning;
 
             var state = new HostState();
-            using var server = new ControlServer(state);
-            server.Start();
+            var eventLog = new EventLog();
 
             // 設定の正本はユーザーごとの保存先。無ければ既定設定から作る。
             var defaultsPath = FindDefaultSettings();
             var store = defaultsPath is null ? null : new SettingsStore(SettingsStore.DefaultSettingsPath, defaultsPath);
 
-            // 設定を読めない場合でもトレイは起動させる（無言で終了しない）。
-            HotkeyProfile[] profiles;
-            var settingsLoaded = true;
-            var disableIme = true;
-            var backend = BackendSettings.Default;
-            var settingsJson = string.Empty;
+            // ゲーム保護の監視。設定を読めない場合は監視しない（勝手に退避しない）。
+            GameProtectionSettings? protection = null;
             try
             {
-                if (store is null)
-                {
-                    profiles = Array.Empty<HotkeyProfile>();
-                }
-                else
+                if (store is not null)
                 {
                     var snapshot = store.Load();
-                    profiles = snapshot.Profiles.ToArray();
-                    disableIme = snapshot.ImeDisableBeforeSend;
-                    backend = snapshot.Backend;
-                    settingsJson = snapshot.Json;
+                    protection = snapshot.GameProtection;
+
+                    // 起動時にも AHK 用スクリプトを合わせておく（前回終了後の変更を取り込む）。
+                    PrepareAhkScript(snapshot.Backend, snapshot.Json);
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException or FormatException)
             {
-                profiles = Array.Empty<HotkeyProfile>();
-                settingsLoaded = false;
+                protection = null;
             }
 
-            using (var engine = new InputEngine(profiles, disableIme))
-            using (var ahk = new AhkBackend())
+            var engine = new EngineControl(ResolveEnginePath(AppContext.BaseDirectory));
+            var controller = protection is null ? null : new LifecycleController(protection, new GameMonitor(), engine);
+
+            using var server = new ControlServer(state);
+            server.Override = command => HandleCommand(command, state, server, engine, eventLog);
+            server.Start();
+
+            using var supervisor = new HostSupervisor(controller, engine, state, eventLog);
+
+            SettingsServer? web = null;
+            try
             {
-                // 不具合の切り分け用に、判定の経過をリングバッファへ残す。
-                var eventLog = new EventLog();
-                engine.Trace = eventLog.Add;
-
-                // 設定画面の内容を AHK 用スクリプトへ書き出してから起動する。
-                void PrepareAhkScript(BackendSettings settings, string json)
+                if (store is not null)
                 {
-                    if (settings.Mode != InputBackend.Ahk || !settings.GenerateScript || json.Length == 0) return;
-
+                    // URL を固定するため、トークンを使わず既定ポートで待ち受ける。
+                    var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+                    web = CreateServer(store, SettingsServer.DefaultPort, webRoot, engine, supervisor, eventLog);
                     try
                     {
-                        AhkScriptWriter.Write(json, AhkScriptWriter.PathFor(settings.AhkScript));
+                        web.Start();
                     }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    catch (System.Net.Sockets.SocketException)
                     {
-                        // 書き出せない場合は設定済みのスクリプトをそのまま使う。
+                        // 固定ポートが他のアプリに使われている場合だけ空きポートへ退避する。
+                        web.Dispose();
+                        web = CreateServer(store, port: 0, webRoot, engine, supervisor, eventLog);
+                        web.Start();
                     }
                 }
 
-                // 保存された設定を、内蔵エンジンと AHK のどちらか一方だけに反映する。
-                void ApplySaved(SettingsSnapshot snapshot)
-                {
-                    engine.ApplyProfiles(snapshot.Profiles, snapshot.ImeDisableBeforeSend);
-                    settingsJson = snapshot.Json;
-                    PrepareAhkScript(snapshot.Backend, snapshot.Json);
-                    ApplyBackend(snapshot.Backend);
-                }
+                // 入力エンジンが動いていなければ起動する（多重起動の判定はエンジン側）。
+                if (!engine.IsRunning()) engine.Start();
+                supervisor.Start();
 
-                void ApplyBackend(BackendSettings settings)
-                {
-                    var previous = backend;
-                    backend = settings;
-
-                    if (settings.Mode == InputBackend.Ahk)
+                ApplicationConfiguration.Initialize();
+                using var tray = new TrayApplication(
+                    state,
+                    server,
+                    web?.Url,
+                    () => supervisor.BackendLabel,
+                    () => supervisor.IsAhkBackend,
+                    restartAhk: () =>
                     {
-                        // 切り替え時は必ず内蔵フックを外してから AHK を起動する。
-                        if (previous.Mode == InputBackend.Builtin) engine.Stop();
-                        engine.Enabled = false;
-                        ahk.Start(settings);
-                        return;
-                    }
-
-                    ahk.Stop();
-                    if (previous.Mode == InputBackend.Ahk)
+                        var response = engine.Forward(ControlProtocol.RestartBackend);
+                        eventLog.Add(response is null
+                            ? "入力エンジンが停止しているため、AHK を再起動できません。"
+                            : "AHK を再起動しました。");
+                        supervisor.RequestRefresh();
+                    },
+                    statusText: () => supervisor.StatusText,
+                    toggle: () =>
                     {
-                        // 再開に失敗した場合は、AHK停止後に無入力のまま Running にしない。
-                        if (!engine.Start())
-                        {
-                            state.Pause();
-                            return;
-                        }
-                    }
-
-                    engine.Enabled = state.State == RuntimeState.Running;
-                }
-
-                // AHK に任せている間は内蔵フックを設置しない（同時稼働させない）。
-                var engineStarted = backend.Mode == InputBackend.Builtin && engine.Start();
-                if (backend.Mode == InputBackend.Ahk)
-                {
-                    PrepareAhkScript(backend, settingsJson);
-                    ahk.Start(backend);
-                }
-
-                // フックを設置できなかった場合は動作中として扱わない。
-                if (!engineStarted && backend.Mode == InputBackend.Builtin) state.Pause();
-                if (!settingsLoaded) state.Pause();
-                state.StateChanged += next => engine.Enabled = next == RuntimeState.Running && backend.Mode == InputBackend.Builtin;
-
-                SettingsServer? web = null;
-                try
-                {
-                    if (store is not null)
+                        var command = state.State == RuntimeState.Running ? ControlProtocol.Pause : ControlProtocol.Resume;
+                        var response = engine.Forward(command);
+                        if (response is null) eventLog.Add("入力エンジンが停止しているため、操作できません。");
+                        supervisor.RequestRefresh();
+                    },
+                    startEngine: () =>
                     {
-                        // URL を固定するため、トークンを使わず既定ポートで待ち受ける。
-                        var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-                        web = new SettingsServer(
-                            store,
-                            SettingsServer.DefaultPort,
-                            statusJson: () => StatusJson(state, engine, ahk, backend),
-                            webRoot: webRoot,
-                            onSaved: snapshot => ApplySaved(snapshot),
-                            logJson: () => eventLog.ToJson());
-                        try
-                        {
-                            web.Start();
-                        }
-                        catch (SocketException)
-                        {
-                            // 固定ポートが他のアプリに使われている場合だけ空きポートへ退避する。
-                            web.Dispose();
-                            web = new SettingsServer(
-                                store,
-                                port: 0,
-                                statusJson: () => StatusJson(state, engine, ahk, backend),
-                                webRoot: webRoot,
-                                onSaved: snapshot => ApplySaved(snapshot),
-                                logJson: () => eventLog.ToJson());
-                            web.Start();
-                        }
-                    }
+                        if (engine.Start()) eventLog.Add("入力エンジンを起動しました。");
+                        else eventLog.Add("入力エンジンを起動できませんでした。");
+                        supervisor.ResumeWatching();
+                        supervisor.RequestRefresh();
+                    });
 
-                    ApplicationConfiguration.Initialize();
-                    using var tray = new TrayApplication(
-                        state,
-                        server,
-                        web?.Url,
-                        () => backend.Mode == InputBackend.Ahk ? "AutoHotkey（バックエンド）" : "内蔵エンジン",
-                        () => backend.Mode == InputBackend.Ahk,
-                        () =>
-                        {
-                            ahk.Stop();
-                            ahk.Start(backend);
-                        });
+                void OnStatusChanged() => tray.RefreshStatus();
+                supervisor.StatusChanged += OnStatusChanged;
 
-                    // AHK の生存監視とスクリプト更新の追従。
-                    using var supervision = new System.Windows.Forms.Timer { Interval = 2000 };
-                    supervision.Tick += (_, _) =>
-                    {
-                        if (backend.Mode != InputBackend.Ahk) return;
-                        ahk.Tick(backend);
-                        if (ahk.ConsumeNotice() is { } notice) tray.Notify(notice);
-                    };
-                    supervision.Start();
+                Action requestRestart = () => restartRequested = true;
+                tray.RestartRequested += requestRestart;
+                Application.Run(tray);
+                tray.RestartRequested -= requestRestart;
+                supervisor.StatusChanged -= OnStatusChanged;
+            }
+            finally
+            {
+                supervisor.Dispose();
+                web?.Dispose();
 
-                    Action requestRestart = () => restartRequested = true;
-                    tray.RestartRequested += requestRestart;
-                    Application.Run(tray);
-                    tray.RestartRequested -= requestRestart;
-                }
-                finally
-                {
-                    web?.Dispose();
+                // 本体の終了時は入力エンジンも止める（フック解除とキー解放はエンジン側で行う）。
+                engine.Forward(ControlProtocol.Shutdown + " " + ControlProtocol.ReasonManual);
 
-                    // ゲーム保護の退避を含め、終了前に必ずフック解除とキー解放を行う。
-                    engine.Stop();
-
-                    // AHK は外部プロセスなので、ホスト終了時は残す（内蔵へ戻す時だけ停止する）。
-                    ahk.Release();
-
-                    // 終了理由が未設定のまま Application.Run を抜けた場合も手動終了として扱う。
-                    if (state.ExitReason == ExitReason.None) state.BeginShutdown(ExitReason.Manual);
-                }
+                // 終了理由が未設定のまま Application.Run を抜けた場合も手動終了として扱う。
+                if (state.ExitReason == ExitReason.None) state.BeginShutdown(ExitReason.Manual);
             }
         }
 
         return restartRequested ? RestartHost() : ExitOk;
+    }
+
+    /// <summary>設定画面のサーバーを作る。保存された内容は入力エンジンへ通知して反映する。</summary>
+    private static SettingsServer CreateServer(
+        SettingsStore store,
+        int port,
+        string webRoot,
+        EngineControl engine,
+        HostSupervisor supervisor,
+        EventLog eventLog)
+        => new(
+            store,
+            port,
+            statusJson: () => engine.StatusJson(),
+            webRoot: webRoot,
+            onSaved: snapshot =>
+            {
+                // AHK の生成スクリプトは本体側で書き出し、入力エンジンには再読込だけを伝える。
+                PrepareAhkScript(snapshot.Backend, snapshot.Json);
+                supervisor.UpdateSettings(snapshot.GameProtection);
+
+                var response = engine.Forward(ControlProtocol.Reload);
+                eventLog.Add(response is null
+                    ? "設定を保存しました（入力エンジンは停止中）。"
+                    : "設定を保存して反映しました。");
+                supervisor.RequestRefresh();
+            },
+            logJson: () => engine.LogJson(eventLog.Snapshot()));
+
+    /// <summary>CLI からのコマンドを、本体の終了または入力エンジンへの転送として扱う。</summary>
+    private static string? HandleCommand(string command, HostState state, ControlServer server, EngineControl engine, EventLog eventLog)
+    {
+        var parts = command.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var verb = parts.Length > 0 ? parts[0].ToUpperInvariant() : string.Empty;
+        var argument = parts.Length > 1 ? parts[1].ToUpperInvariant() : string.Empty;
+
+        switch (verb)
+        {
+            case ControlProtocol.Ping:
+                return ControlProtocol.Pong;
+
+            case ControlProtocol.Status when argument == ControlProtocol.StatusJson:
+                return ControlProtocol.Ok(engine.StatusJson());
+
+            case ControlProtocol.Log:
+                return ControlProtocol.Ok(engine.LogJson(eventLog.Snapshot()));
+
+            case ControlProtocol.Status:
+            case ControlProtocol.Pause:
+            case ControlProtocol.Resume:
+            case ControlProtocol.Reload:
+            case ControlProtocol.RestartBackend:
+                return engine.Forward(command) ?? StoppedResponse(verb);
+
+            case ControlProtocol.Shutdown:
+            {
+                // 本体（WebUI）を終了する。入力エンジンは終了処理で止める。
+                if (argument.Length > 0 && argument != ControlProtocol.ReasonGame && argument != ControlProtocol.ReasonManual)
+                {
+                    return ControlProtocol.Error("UNKNOWN_REASON");
+                }
+
+                var reason = argument == ControlProtocol.ReasonGame ? ExitReason.GameProtection : ExitReason.Manual;
+                state.BeginShutdown(reason);
+                server.RequestShutdown();
+                return ControlProtocol.Ok("SHUTTINGDOWN " + (reason == ExitReason.GameProtection
+                    ? ControlProtocol.ReasonGame
+                    : ControlProtocol.ReasonManual));
+            }
+
+            default:
+                return ControlProtocol.Error("UNKNOWN_COMMAND");
+        }
+    }
+
+    /// <summary>入力エンジンが停止している場合の応答。停止を「動作中」と偽らない。</summary>
+    private static string StoppedResponse(string verb)
+    {
+        if (verb == ControlProtocol.Status) return ControlProtocol.Ok(ControlProtocol.StateStopped);
+        return ControlProtocol.Error("ENGINE_STOPPED");
+    }
+
+    /// <summary>設定画面の内容を AHK 用スクリプトへ書き出す。</summary>
+    private static void PrepareAhkScript(BackendSettings settings, string json)
+    {
+        if (settings.Mode != InputBackend.Ahk || !settings.GenerateScript || json.Length == 0) return;
+
+        try
+        {
+            AhkScriptWriter.Write(json, AhkScriptWriter.PathFor(settings.AhkScript));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 書き出せない場合は設定済みのスクリプトをそのまま使う。
+        }
+    }
+
+    /// <summary>
+    /// 入力エンジンの実行ファイルを探す。
+    /// 発行物は同じフォルダーに置かれるが、開発時は別プロジェクトのビルド出力にあるため、
+    /// どちらの配置でも見つけられるようにする。
+    /// </summary>
+    internal static string ResolveEnginePath(string baseDirectory)
+    {
+        var local = Path.Combine(baseDirectory, "LeafHotKeyEngine.exe");
+        if (File.Exists(local)) return local;
+
+        var directory = new DirectoryInfo(baseDirectory);
+        while (directory is not null)
+        {
+            foreach (var configuration in new[] { "Release", "Debug" })
+            {
+                var candidate = Path.Combine(directory.FullName, "src", "LeafHotKeyEngine", "bin", configuration, "net8.0-windows", "LeafHotKeyEngine.exe");
+                if (File.Exists(candidate)) return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return local;
     }
 
     private static int RestartHost()
@@ -273,10 +313,11 @@ public static class Program
             {
                 // トレイ再起動も通常起動と同じバッチを通し、ソース更新時の Release ビルド判定を行う。
                 // 旧プロセスが Mutex を解放してからバッチが --status を見るよう短く待つ。
-                using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                var command = $"timeout /t 1 /nobreak >nul & call \"{launcher}\"";
+                using var process = Process.Start(new ProcessStartInfo
                 {
                     FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-                    Arguments = $"/d /c ping 127.0.0.1 -n 2 >nul & call \"{launcher}\"",
+                    ArgumentList = { "/d", "/c", command },
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = Path.GetDirectoryName(launcher) ?? AppContext.BaseDirectory,
@@ -285,7 +326,7 @@ public static class Program
             }
 
             // 発行物だけの環境にはリポジトリの起動バッチが無いため、従来どおり本体を直接再起動する。
-            using var fallback = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            using var fallback = Process.Start(new ProcessStartInfo
             {
                 FileName = Application.ExecutablePath,
                 UseShellExecute = true,
@@ -311,26 +352,6 @@ public static class Program
 
         return null;
     }
-
-    /// <summary>WebUI へ返す現在の状態。</summary>
-    private static string StatusJson(HostState state, InputEngine engine, AhkBackend ahk, BackendSettings backend)
-        => System.Text.Json.JsonSerializer.Serialize(new
-        {
-            state = state.State.ToString().ToLowerInvariant(),
-            engineInstalled = engine.Installed,
-            activeProfile = engine.ActiveProfileName,
-            heldModifiers = engine.HeldModifiers.ToArray(),
-            holdSweeps = engine.HoldSweeps,
-            holdReasserts = engine.HoldReasserts,
-            holdReleases = engine.HoldReleases,
-            backend = backend.Mode == InputBackend.Ahk ? "ahk" : "builtin",
-            backendStatus = ahk.Status,
-            backendNote = ahk.LastNotice ?? string.Empty,
-            backendScript = ahk.ScriptPath,
-            backendGenerated = backend.GenerateScript ? AhkScriptWriter.PathFor(backend.AhkScript) : string.Empty,
-            backendPid = ahk.ProcessId,
-            backendRestarts = ahk.Restarts,
-        });
 
     /// <summary>実行ディレクトリから上位へ defaults/settings.json を探す。</summary>
     private static string? FindDefaultSettings()

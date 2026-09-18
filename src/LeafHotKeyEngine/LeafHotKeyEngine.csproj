@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>LeafHotKeyEngine</AssemblyName>
+    <RootNamespace>LeafHotKey</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- 実行ファイルのアイコンは本体と共通にする。 -->
+    <ApplicationIcon>..\LeafHotKey\Assets\LeafHotKey.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      入力エンジンは単独でも設定を読める必要があるため、設定の解釈と制御プロトコルだけを本体と共有する。
+      WebUI・ゲーム保護監視・トレイは持たない。
+    -->
+    <Compile Include="..\LeafHotKey\ControlProtocol.cs" Link="Shared\ControlProtocol.cs" />
+    <Compile Include="..\LeafHotKey\ControlClient.cs" Link="Shared\ControlClient.cs" />
+    <Compile Include="..\LeafHotKey\ControlServer.cs" Link="Shared\ControlServer.cs" />
+    <Compile Include="..\LeafHotKey\HostState.cs" Link="Shared\HostState.cs" />
+    <Compile Include="..\LeafHotKey\SingleInstance.cs" Link="Shared\SingleInstance.cs" />
+    <Compile Include="..\LeafHotKey\SettingsStore.cs" Link="Shared\SettingsStore.cs" />
+    <Compile Include="..\LeafHotKey\HotkeyProfile.cs" Link="Shared\HotkeyProfile.cs" />
+    <Compile Include="..\LeafHotKey\SendToken.cs" Link="Shared\SendToken.cs" />
+    <Compile Include="..\LeafHotKey\SendSequenceParser.cs" Link="Shared\SendSequenceParser.cs" />
+    <Compile Include="..\LeafHotKey\KeyNames.cs" Link="Shared\KeyNames.cs" />
+    <Compile Include="..\LeafHotKey\GameProtectionSettings.cs" Link="Shared\GameProtectionSettings.cs" />
+    <Compile Include="..\LeafHotKey\BackendSettings.cs" Link="Shared\BackendSettings.cs" />
+    <Compile Include="..\LeafHotKey\EventLog.cs" Link="Shared\EventLog.cs" />
+    <Compile Include="..\LeafHotKey\AhkScriptWriter.cs" Link="Shared\AhkScriptWriter.cs" />
+  </ItemGroup>
+
+</Project>

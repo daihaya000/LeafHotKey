@@ -17,6 +17,9 @@ public sealed class TrayApplication : ApplicationContext
     private readonly Func<string>? _backendLabel;
     private readonly Func<bool>? _isAhkBackend;
     private readonly Action? _restartAhk;
+    private readonly Func<string>? _statusText;
+    private readonly Action? _toggle;
+    private readonly Action? _startEngine;
 
     /// <summary>すべてのリソースを解放した後に、本体を起動し直す要求。</summary>
     public event Action? RestartRequested;
@@ -27,7 +30,10 @@ public sealed class TrayApplication : ApplicationContext
         string? settingsUrl = null,
         Func<string>? backendLabel = null,
         Func<bool>? isAhkBackend = null,
-        Action? restartAhk = null)
+        Action? restartAhk = null,
+        Func<string>? statusText = null,
+        Action? toggle = null,
+        Action? startEngine = null)
     {
         _state = state;
         _server = server;
@@ -35,6 +41,9 @@ public sealed class TrayApplication : ApplicationContext
         _backendLabel = backendLabel;
         _isAhkBackend = isAhkBackend;
         _restartAhk = restartAhk;
+        _statusText = statusText;
+        _toggle = toggle;
+        _startEngine = startEngine;
 
         _toggleItem = new ToolStripMenuItem("一時停止", null, (_, _) => Toggle());
         var restartItem = new ToolStripMenuItem("再起動", null, (_, _) => RequestRestart());
@@ -45,14 +54,20 @@ public sealed class TrayApplication : ApplicationContext
         };
         var versionItem = new ToolStripMenuItem(ReadCommitLabel()) { Enabled = false };
         var ahkRestartItem = new ToolStripMenuItem("AHKを再起動", null, (_, _) => _restartAhk?.Invoke());
+        var startEngineItem = new ToolStripMenuItem("入力エンジンを起動", null, (_, _) => _startEngine?.Invoke());
 
         var menu = new ContextMenuStrip();
-        menu.Opening += (_, _) => ahkRestartItem.Enabled = _isAhkBackend?.Invoke() == true;
+        menu.Opening += (_, _) =>
+        {
+            ahkRestartItem.Enabled = _isAhkBackend?.Invoke() == true;
+            startEngineItem.Enabled = !ControlClient.IsHostResponding(300, ControlProtocol.EnginePipeName);
+        };
         menu.Items.Add(versionItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(settingsItem);
         menu.Items.Add(restartItem);
         menu.Items.Add(ahkRestartItem);
+        menu.Items.Add(startEngineItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_toggleItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -131,8 +146,27 @@ public sealed class TrayApplication : ApplicationContext
 
     private void Toggle()
     {
+        // 入力エンジンを操作する場合（別プロセス構成）は、そちらへ委譲する。
+        if (_toggle is not null)
+        {
+            _toggle();
+            return;
+        }
+
         if (_state.State == RuntimeState.Running) _state.Pause();
         else if (_state.State == RuntimeState.Paused) _state.Resume();
+    }
+
+    /// <summary>トレイの表示を最新の状態へ更新する（監視側から呼ぶ）。</summary>
+    public void RefreshStatus()
+    {
+        if (_icon.ContextMenuStrip is { } menu && menu.InvokeRequired)
+        {
+            menu.BeginInvoke(RefreshStatus);
+            return;
+        }
+
+        UpdateSurface(_state.State);
     }
 
     private void OnShutdownRequested()
@@ -175,13 +209,14 @@ public sealed class TrayApplication : ApplicationContext
     {
         _toggleItem.Text = next == RuntimeState.Paused ? "再開" : "一時停止";
         var backend = _backendLabel?.Invoke();
-        var suffix = string.IsNullOrEmpty(backend) ? string.Empty : $" — {backend}";
-        _icon.Text = next switch
+        var suffix = string.IsNullOrEmpty(backend) || backend == "-" ? string.Empty : $" — {backend}";
+        var stateText = _statusText?.Invoke() ?? next switch
         {
-            RuntimeState.Running => $"LeafHotKey{suffix} — 入力変換は有効",
-            RuntimeState.Paused => $"LeafHotKey{suffix} — 一時停止中",
-            _ => $"LeafHotKey{suffix} — 終了処理中",
+            RuntimeState.Running => "入力変換は有効",
+            RuntimeState.Paused => "一時停止中",
+            _ => "終了処理中",
         };
+        _icon.Text = $"LeafHotKey{suffix} — {stateText}";
     }
 
     protected override void Dispose(bool disposing)

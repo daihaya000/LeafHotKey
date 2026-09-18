@@ -5,7 +5,7 @@ namespace LeafHotKey;
 /// <summary>
 /// 設定画面のプロファイルから AutoHotkey (v1) スクリプトを生成する。
 /// 生成物は保存のたびに上書きされるため、手で編集しても次回の保存で戻る。
-/// ゲーム保護は本体側の Watcher が担当するので、ここには入れない。
+/// ゲーム保護は本体（LeafHotKey.exe）が担当するので、ここには入れない。
 /// </summary>
 public static class AhkScriptWriter
 {
@@ -53,7 +53,7 @@ public static class AhkScriptWriter
 
         text.AppendLine("; LeafHotKey が設定画面の内容から生成したファイルです。");
         text.AppendLine("; 保存のたびに上書きされるので、直接編集しても次回の保存で戻ります。");
-        text.AppendLine("; ゲーム保護は LeafHotKey 本体（Watcher）が担当します。");
+        text.AppendLine("; ゲーム保護は LeafHotKey 本体が担当します。");
         text.AppendLine("#NoEnv");
         text.AppendLine("#InstallKeybdHook");
         text.AppendLine("#UseHook");
