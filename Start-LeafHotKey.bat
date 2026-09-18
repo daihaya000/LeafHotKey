@@ -76,7 +76,7 @@ if defined HOST_RUNNING (
     rem Start the watcher when only the host is running, so protection is not lost.
     if not defined WATCHER_RUNNING if defined WATCHER (
         echo Starting LeafHotKeyWatcher...
-        start "" /min "!WATCHER!" --run
+        powershell -NoProfile -Command "Start-Process -FilePath '!WATCHER!' -ArgumentList '--run' -WindowStyle Hidden"
     )
     echo LeafHotKey is already running.
     exit /b 0
@@ -113,7 +113,7 @@ start "" "%HOST%"
 
 if defined WATCHER (
     powershell -NoProfile -Command "Start-Sleep -Seconds 2"
-    start "" /min "%WATCHER%" --run
+    powershell -NoProfile -Command "Start-Process -FilePath '%WATCHER%' -ArgumentList '--run' -WindowStyle Hidden"
 )
 
 exit /b 0
