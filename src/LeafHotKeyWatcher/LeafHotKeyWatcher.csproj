@@ -11,6 +11,8 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- 実行ファイルのアイコンは本体と共通にする。 -->
+    <ApplicationIcon>..\LeafHotKey\Assets\LeafHotKey.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
