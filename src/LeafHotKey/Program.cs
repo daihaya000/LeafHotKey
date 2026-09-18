@@ -273,11 +273,10 @@ public static class Program
             {
                 // トレイ再起動も通常起動と同じバッチを通し、ソース更新時の Release ビルド判定を行う。
                 // 旧プロセスが Mutex を解放してからバッチが --status を見るよう短く待つ。
-                var command = $"timeout /t 1 /nobreak >nul & call \"{launcher}\"";
                 using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-                    ArgumentList = { "/d", "/c", command },
+                    Arguments = $"/d /c ping 127.0.0.1 -n 2 >nul & call \"{launcher}\"",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = Path.GetDirectoryName(launcher) ?? AppContext.BaseDirectory,
