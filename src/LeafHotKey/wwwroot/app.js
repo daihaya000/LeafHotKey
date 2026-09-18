@@ -196,94 +196,228 @@
     return { field, input };
   }
 
-  function renderRuleActionFields(rule, action) {
-    const fields = rule.querySelector(".rule-action-fields");
-    fields.textContent = "";
-    if (action === "send") {
-      const sequence = document.createElement("label");
-      sequence.className = "field field-full";
-      sequence.textContent = "送るキー列（1行に1操作）";
-      const input = document.createElement("textarea");
-      input.rows = 2;
-      input.dataset.ruleSequence = "";
-      input.value = rule.dataset.sequence || "";
-      sequence.append(input);
-      fields.append(sequence);
-      return;
-    }
-    if (action === "hold") {
-      const modifier = makeInput("維持するキー", "", rule.dataset.modifier || "");
-      modifier.input.dataset.ruleModifier = "";
-      const release = makeInput("解除するキー", "", rule.dataset.releaseOn || "");
-      release.input.dataset.ruleReleaseOn = "";
-      fields.append(modifier.field, release.field);
-    }
+  // ルール編集は表形式。フィルタで隠れている行も ruleDraft に保持する。
+  let ruleDraft = [];
+
+  function cloneRule(rule) {
+    return JSON.parse(JSON.stringify(rule || {}));
   }
 
-  function renderRuleEditor(ruleData = {}) {
-    const rule = document.createElement("section");
-    rule.className = "rule-editor";
-    const trigger = ruleData.trigger || {};
-    const action = ruleData.action || { type: "send", sequence: [] };
-    rule.dataset.sequence = (action.sequence || []).join("\n");
-    rule.dataset.modifier = action.modifier || "";
-    rule.dataset.releaseOn = action.releaseOn || "";
+  function ruleSearchText(rule) {
+    const trigger = rule.trigger || {};
+    const action = rule.action || {};
+    const modifiers = Array.isArray(trigger.modifiers) ? trigger.modifiers.join(" ") : trigger.modifiers || "";
+    const sequence = Array.isArray(action.sequence) ? action.sequence.join(" ") : action.sequence || "";
+    return [trigger.prefix, trigger.key, modifiers, action.type, action.modifier, action.releaseOn, sequence]
+      .filter(Boolean).join(" ").toLocaleLowerCase();
+  }
 
-    const header = document.createElement("div");
-    header.className = "rule-header";
-    const title = document.createElement("strong");
-    title.textContent = "ショートカット";
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "text-link rule-remove";
-    remove.textContent = "削除";
-    remove.addEventListener("click", () => rule.remove());
-    header.append(title, remove);
+  function makeRuleInput(datasetKey, label, value, placeholder, className) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.dataset[datasetKey] = "";
+    input.setAttribute("aria-label", label);
+    input.placeholder = placeholder || "";
+    input.value = value || "";
+    if (className) input.className = className;
+    return input;
+  }
 
-    const grid = document.createElement("div");
-    grid.className = "rule-grid";
-    const key = makeInput("トリガキー", "", trigger.key || "");
-    key.input.required = true;
-    key.input.dataset.ruleKey = "";
-    const prefix = makeInput("前置キー", "", trigger.prefix || "");
-    prefix.input.dataset.rulePrefix = "";
-    const modifiers = makeInput("修飾キー", "", (trigger.modifiers || []).join(" + "));
-    modifiers.input.dataset.ruleModifiers = "";
-    modifiers.field.querySelector("input").placeholder = "Ctrl + Shift";
-    const actionType = document.createElement("label");
-    actionType.className = "field";
-    actionType.textContent = "動作";
-    const select = document.createElement("select");
-    select.dataset.ruleAction = "";
+  function renderRuleDetail(detail, type, action) {
+    detail.textContent = "";
+    if (type === "hold") {
+      const modifier = makeRuleInput("ruleModifier", "維持するキー", action.modifier, "維持するキー（例: Ctrl）");
+      const release = makeRuleInput("ruleReleaseOn", "解除するキー", action.releaseOn, "解除するキー（例: f13）");
+      detail.append(modifier, release);
+      return;
+    }
+
+    if (type === "passthrough") {
+      const note = document.createElement("span");
+      note.className = "rule-note";
+      note.textContent = "元の入力をそのまま通します。";
+      detail.append(note);
+      return;
+    }
+
+    const sequence = document.createElement("textarea");
+    const lines = Array.isArray(action.sequence) ? action.sequence : [];
+    sequence.rows = Math.min(6, Math.max(1, lines.length || 1));
+    sequence.spellcheck = false;
+    sequence.dataset.ruleSequence = "";
+    sequence.placeholder = "送るキー（例: ^z / {Esc}。1行に1操作）";
+    sequence.setAttribute("aria-label", "送るキー列");
+    sequence.value = lines.join("\n");
+    // 2行以上ある割り当て（Snd の第2引数）が隠れないよう高さを合わせる。
+    sequence.addEventListener("input", () => {
+      const needed = Math.min(6, Math.max(1, sequence.value.split("\n").length));
+      if (sequence.rows !== needed) sequence.rows = needed;
+    });
+    detail.append(sequence);
+  }
+
+  function renderRuleRow(rule, index) {
+    const trigger = rule.trigger || {};
+    const action = rule.action || { type: "send" };
+    const row = document.createElement("div");
+    row.className = "rule-row";
+    row.dataset.ruleIndex = String(index);
+    // blind（AHK の {Blind}）は編集対象ではないが、保存時に消えないよう保持する。
+    row.dataset.ruleBlind = action.blind === false ? "false" : "true";
+
+    const prefix = makeRuleInput("rulePrefix", "前置キー", trigger.prefix, "—", "rule-prefix");
+    if ((trigger.prefix || "").trim()) prefix.classList.add("is-set");
+    prefix.addEventListener("input", () => prefix.classList.toggle("is-set", prefix.value.trim() !== ""));
+
+    const key = makeRuleInput("ruleKey", "トリガキー", trigger.key, "f13", "rule-key");
+    const modifiers = makeRuleInput(
+      "ruleModifiers",
+      "修飾キー",
+      Array.isArray(trigger.modifiers) ? trigger.modifiers.join(" + ") : trigger.modifiers,
+      "Ctrl + Shift");
+
+    const actionType = document.createElement("select");
+    actionType.dataset.ruleAction = "";
+    actionType.setAttribute("aria-label", "動作");
     [["send", "キーを送る"], ["hold", "キーを維持"], ["passthrough", "元の入力を通す"]].forEach(([value, label]) => {
       const option = document.createElement("option");
       option.value = value;
       option.textContent = label;
-      option.selected = action.type === value;
-      select.append(option);
+      option.selected = (action.type || "send") === value;
+      actionType.append(option);
     });
-    actionType.append(select);
+
+    const detail = document.createElement("div");
+    detail.className = "rule-detail";
 
     const flags = document.createElement("div");
     flags.className = "rule-flags";
-    [["any", "修飾キーを問わない", trigger.anyModifier], ["pass", "元の入力も通す", trigger.passThroughNative]].forEach(([name, label, checked]) => {
+    [["ruleAnyModifier", "*", "修飾キーの有無を問わない（AHK の *）", trigger.anyModifier],
+     ["rulePassThrough", "~", "元の入力を通す（AHK の ~）", trigger.passThroughNative]].forEach(([datasetKey, mark, title, checked]) => {
       const field = document.createElement("label");
-      field.className = "check-field";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = checked === true;
-      checkbox.dataset[name === "any" ? "ruleAnyModifier" : "rulePassThrough"] = "";
-      field.append(checkbox, document.createTextNode(label));
+      field.className = "rule-flag";
+      field.title = title;
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.dataset[datasetKey] = "";
+      box.checked = checked === true;
+      box.setAttribute("aria-label", title);
+      field.append(box, document.createTextNode(mark));
       flags.append(field);
     });
 
-    const actionFields = document.createElement("div");
-    actionFields.className = "rule-action-fields";
-    grid.append(key.field, prefix.field, modifiers.field, actionType, flags, actionFields);
-    rule.append(header, grid);
-    select.addEventListener("change", () => renderRuleActionFields(rule, select.value));
-    renderRuleActionFields(rule, action.type || "send");
-    return rule;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "rule-remove";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", "このショートカットを削除");
+    remove.addEventListener("click", () => {
+      commitVisibleRules();
+      ruleDraft[index] = null;
+      renderRuleList();
+    });
+
+    actionType.addEventListener("change", () => {
+      const next = actionType.value;
+      renderRuleDetail(detail, next, next === (action.type || "send") ? action : {});
+    });
+
+    renderRuleDetail(detail, action.type || "send", action);
+    row.append(prefix, key, modifiers, actionType, detail, flags, remove);
+    return row;
+  }
+
+  function snapshotRuleRow(row) {
+    const get = (datasetKey) => row.querySelector(`[data-${datasetKey}]`);
+    const detail = row.querySelector(".rule-detail");
+    const detailValue = (datasetKey) => {
+      const node = detail.querySelector(`[data-${datasetKey}]`);
+      return node ? node.value : "";
+    };
+
+    return {
+      trigger: {
+        key: get("rule-key").value,
+        prefix: get("rule-prefix").value,
+        modifiers: get("rule-modifiers").value,
+        anyModifier: get("rule-any-modifier").checked,
+        passThroughNative: get("rule-pass-through").checked,
+      },
+      action: {
+        type: get("rule-action").value,
+        sequence: detailValue("rule-sequence").split("\n"),
+        modifier: detailValue("rule-modifier"),
+        releaseOn: detailValue("rule-release-on"),
+        blind: row.dataset.ruleBlind !== "false",
+      },
+    };
+  }
+
+  function commitVisibleRules() {
+    el("rule-list").querySelectorAll(".rule-row").forEach((row) => {
+      const index = Number(row.dataset.ruleIndex);
+      if (Number.isInteger(index)) ruleDraft[index] = snapshotRuleRow(row);
+    });
+  }
+
+  function renderRuleList() {
+    ruleDraft = ruleDraft.filter(Boolean);
+    const query = (el("rule-filter").value || "").trim().toLocaleLowerCase();
+    const list = el("rule-list");
+    list.textContent = "";
+
+    let shown = 0;
+    ruleDraft.forEach((rule, index) => {
+      if (!ruleSearchText(rule).includes(query)) return;
+      list.append(renderRuleRow(rule, index));
+      shown++;
+    });
+
+    el("rule-count-label").textContent = query
+      ? `${shown} / ${ruleDraft.length} 件を表示`
+      : `全${ruleDraft.length} 件（1行が1つの割り当て）`;
+    el("rule-empty").hidden = shown > 0;
+  }
+
+  function openRuleEditor(rules) {
+    ruleDraft = (rules || []).map(cloneRule);
+    el("rule-filter").value = "";
+    renderRuleList();
+  }
+
+  function rulesFromDraft() {
+    commitVisibleRules();
+    ruleDraft = ruleDraft.filter(Boolean);
+
+    return ruleDraft.map((rule) => {
+      const trigger = rule.trigger || {};
+      const type = (rule.action || {}).type || "send";
+      const key = (trigger.key || "").trim();
+      if (!key) throw new Error("トリガキーを入力してください。");
+
+      const parsed = {};
+      const prefix = (trigger.prefix || "").trim();
+      const modifiers = String(trigger.modifiers || "").split(/[+,\s]+/).filter(Boolean);
+      if (prefix) parsed.prefix = prefix;
+      parsed.key = key;
+      if (modifiers.length) parsed.modifiers = modifiers;
+      if (trigger.anyModifier) parsed.anyModifier = true;
+      if (trigger.passThroughNative) parsed.passThroughNative = true;
+
+      const action = { type };
+      if (type === "send") {
+        action.sequence = (rule.action.sequence || []).map((line) => String(line).trim()).filter(Boolean);
+        if (!action.sequence.length) throw new Error(`${key} に送るキー列を入力してください。`);
+      }
+      if (type === "hold") {
+        action.modifier = (rule.action.modifier || "").trim();
+        action.releaseOn = (rule.action.releaseOn || "").trim();
+        action.blind = rule.action.blind !== false;
+        if (!action.modifier || !action.releaseOn) throw new Error(`${key} の維持するキーと解除するキーを入力してください。`);
+      }
+
+      return { trigger: parsed, action };
+    });
   }
 
   function openProfileEditor(index) {
@@ -295,37 +429,8 @@
     el("profile-name").value = profile.name || "";
     el("profile-processes").value = (profile.processNames || []).join("\n");
     setSwitch(el("profile-enabled"), profile.enabled !== false);
-    const list = el("rule-list");
-    list.textContent = "";
-    (profile.rules || []).forEach((rule) => list.append(renderRuleEditor(rule)));
+    openRuleEditor(profile.rules);
     el("profile-dialog").showModal();
-  }
-
-  function readRuleEditors() {
-    return [...el("rule-list").querySelectorAll(".rule-editor")].map((row) => {
-      const get = (name) => row.querySelector(`[data-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}]`);
-      const key = get("ruleKey").value.trim();
-      const type = get("ruleAction").value;
-      if (!key) throw new Error("トリガキーを入力してください。");
-      const trigger = { key };
-      const prefix = get("rulePrefix").value.trim();
-      const modifiers = get("ruleModifiers").value.split(/[+,\s]+/).filter(Boolean);
-      if (prefix) trigger.prefix = prefix;
-      if (modifiers.length) trigger.modifiers = modifiers;
-      if (get("ruleAnyModifier").checked) trigger.anyModifier = true;
-      if (get("rulePassThrough").checked) trigger.passThroughNative = true;
-      const action = { type };
-      if (type === "send") {
-        action.sequence = lines(get("ruleSequence").value);
-        if (!action.sequence.length) throw new Error(`${key} に送るキー列を入力してください。`);
-      }
-      if (type === "hold") {
-        action.modifier = get("ruleModifier").value.trim();
-        action.releaseOn = get("ruleReleaseOn").value.trim();
-        if (!action.modifier || !action.releaseOn) throw new Error(`${key} の維持するキーと解除するキーを入力してください。`);
-      }
-      return { trigger, action };
-    });
   }
 
   function applyProfileEditor() {
@@ -337,7 +442,7 @@
       profile.name = name;
       profile.enabled = el("profile-enabled").getAttribute("aria-checked") === "true";
       profile.processNames = lines(el("profile-processes").value);
-      profile.rules = readRuleEditors();
+      profile.rules = rulesFromDraft();
       el("profile-dialog").close();
       markDirty();
       renderProfiles();
@@ -640,7 +745,20 @@
     const button = el("profile-enabled");
     setSwitch(button, button.getAttribute("aria-checked") !== "true");
   });
-  el("add-rule").addEventListener("click", () => el("rule-list").append(renderRuleEditor()));
+  el("add-rule").addEventListener("click", () => {
+    commitVisibleRules();
+    el("rule-filter").value = "";
+    ruleDraft.push({ trigger: { key: "" }, action: { type: "send", sequence: [""] } });
+    renderRuleList();
+
+    const rows = el("rule-list").querySelectorAll(".rule-row");
+    const last = rows[rows.length - 1];
+    if (last) last.querySelector("[data-rule-key]").focus();
+  });
+  el("rule-filter").addEventListener("input", () => {
+    commitVisibleRules();
+    renderRuleList();
+  });
   el("apply-profile").addEventListener("click", applyProfileEditor);
   el("profile-dialog").addEventListener("close", () => { editingProfileIndex = null; });
 

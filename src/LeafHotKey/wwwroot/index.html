@@ -183,7 +183,20 @@
                 <div class="field profile-enabled-field"><label>有効</label><button class="switch" type="button" id="profile-enabled" role="switch" aria-checked="false" aria-label="プロファイルを有効にする"></button></div>
                 <div class="field field-full"><label for="profile-processes">対象プロセス</label><textarea id="profile-processes" rows="3" spellcheck="false" placeholder="例: chrome.exe&#10;1行に1件"></textarea><span class="fine">実行ファイル名を1行に1件入力します。</span></div>
               </div>
-              <section class="profile-rules" aria-labelledby="profile-rules-title"><div class="section-heading"><div><h2 id="profile-rules-title">ショートカット</h2><p class="fine">トリガと動作を入力します。</p></div><button class="button button-secondary button-small" type="button" id="add-rule">追加</button></div><div id="rule-list"></div></section>
+              <section class="profile-rules" aria-labelledby="profile-rules-title">
+                <div class="section-heading">
+                  <div><h2 id="profile-rules-title">ショートカット</h2><p class="fine" id="rule-count-label">-</p></div>
+                  <div class="rule-toolbar">
+                    <label class="rule-search" for="rule-filter"><span class="sr-only">ショートカットを絞り込む</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="rule-filter" type="search" autocomplete="off" placeholder="キーや送信内容で絞り込み" /></label>
+                    <button class="button button-secondary button-small" type="button" id="add-rule">追加</button>
+                  </div>
+                </div>
+                <div class="rule-table" role="region" aria-label="ショートカット一覧">
+                  <div class="rule-table-head" aria-hidden="true"><span>前置</span><span>キー</span><span>修飾</span><span>動作</span><span>内容</span><span>* ~</span><span></span></div>
+                  <div id="rule-list"></div>
+                </div>
+                <div class="empty-state" id="rule-empty" hidden><p>条件に合うショートカットがありません。</p></div>
+              </section>
               <div class="form-actions"><button class="button button-secondary button-small" type="submit" value="cancel">キャンセル</button><button class="button button-primary button-small" type="button" id="apply-profile">編集を適用</button></div>
             </form>
           </dialog>
