@@ -136,16 +136,7 @@ public static class Program
             ControlProtocol.EnginePipeName,
             statusJson: () => StatusJson(state, engine, ahk, backend),
             logJson: () => eventLog.ToJson(),
-            reload: Reload,
-            restartBackend: () =>
-            {
-                lock (ahkGate)
-                {
-                    if (backend.Mode != InputBackend.Ahk) return false;
-                    ahk.Stop();
-                    return ahk.Start(backend);
-                }
-            });
+            reload: Reload);
 
         using var quit = new ManualResetEventSlim(false);
         server.ShutdownRequested += () => quit.Set();
@@ -164,14 +155,24 @@ public static class Program
         using var supervision = new System.Threading.Timer(
             _ =>
             {
-                if (backend.Mode != InputBackend.Ahk) return;
-                lock (ahkGate) ahk.Tick(backend);
+                try
+                {
+                    if (backend.Mode != InputBackend.Ahk) return;
+                    lock (ahkGate) ahk.Tick(backend);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or System.ComponentModel.Win32Exception or IOException)
+                {
+                    // 監視の失敗でエンジンを落とさない。次の周期で判定し直す。
+                }
             },
             null,
             TimeSpan.FromSeconds(2),
             TimeSpan.FromSeconds(2));
 
         quit.Wait();
+
+        // 監視タイマーを止めてから終了処理に入る（AHK の操作と競合させない）。
+        supervision.Dispose();
 
         // ゲーム保護の退避を含め、終了前に必ずフック解除とキー解放を行う。
         engine.Stop();

@@ -15,8 +15,6 @@ public sealed class TrayApplication : ApplicationContext
 
     private readonly string? _settingsUrl;
     private readonly Func<string>? _backendLabel;
-    private readonly Func<bool>? _isAhkBackend;
-    private readonly Action? _restartAhk;
     private readonly Func<string>? _statusText;
     private readonly Action? _toggle;
     private readonly Action? _startEngine;
@@ -29,8 +27,6 @@ public sealed class TrayApplication : ApplicationContext
         ControlServer server,
         string? settingsUrl = null,
         Func<string>? backendLabel = null,
-        Func<bool>? isAhkBackend = null,
-        Action? restartAhk = null,
         Func<string>? statusText = null,
         Action? toggle = null,
         Action? startEngine = null)
@@ -39,8 +35,6 @@ public sealed class TrayApplication : ApplicationContext
         _server = server;
         _settingsUrl = settingsUrl;
         _backendLabel = backendLabel;
-        _isAhkBackend = isAhkBackend;
-        _restartAhk = restartAhk;
         _statusText = statusText;
         _toggle = toggle;
         _startEngine = startEngine;
@@ -53,20 +47,20 @@ public sealed class TrayApplication : ApplicationContext
             Enabled = _settingsUrl is not null,
         };
         var versionItem = new ToolStripMenuItem(ReadCommitLabel()) { Enabled = false };
-        var ahkRestartItem = new ToolStripMenuItem("AHKを再起動", null, (_, _) => _restartAhk?.Invoke());
         var startEngineItem = new ToolStripMenuItem("入力エンジンを起動", null, (_, _) => _startEngine?.Invoke());
 
         var menu = new ContextMenuStrip();
         menu.Opening += (_, _) =>
         {
-            ahkRestartItem.Enabled = _isAhkBackend?.Invoke() == true;
-            startEngineItem.Enabled = !ControlClient.IsHostResponding(300, ControlProtocol.EnginePipeName);
+            // 入力エンジンが停止している間は、停止・再開のどちらも送り先が無い。
+            var engineResponds = ControlClient.IsHostResponding(300, ControlProtocol.EnginePipeName);
+            startEngineItem.Enabled = !engineResponds;
+            _toggleItem.Enabled = engineResponds;
         };
         menu.Items.Add(versionItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(settingsItem);
         menu.Items.Add(restartItem);
-        menu.Items.Add(ahkRestartItem);
         menu.Items.Add(startEngineItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_toggleItem);

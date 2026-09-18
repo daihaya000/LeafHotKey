@@ -29,7 +29,13 @@ public static class SelfCheck
         // 実行中の本体へ影響しないよう、検証専用のパイプ名を使う。
         var pipeName = "LeafHotKey.selfcheck." + Guid.NewGuid().ToString("N");
         var state = new HostState();
-        using var server = new ControlServer(state, pipeName);
+        var reloadCount = 0;
+        using var server = new ControlServer(
+            state,
+            pipeName,
+            statusJson: () => "{\"state\":\"running\"}",
+            logJson: () => "{\"events\":[\"a\"]}",
+            reload: () => Interlocked.Increment(ref reloadCount) > 0);
         var shutdownRequested = 0;
         server.ShutdownRequested += () => Interlocked.Increment(ref shutdownRequested);
         server.Start();
@@ -52,6 +58,13 @@ public static class SelfCheck
         Check("pause.twice", Call("pause.twice", ControlProtocol.Pause) == "ERR NOT_RUNNING", "停止中の再停止は拒否する");
         Check("resume", Call("resume", ControlProtocol.Resume) == "OK RUNNING", "RESUME で再開する");
         Check("unknown", Call("unknown", "NOPE") == "ERR UNKNOWN_COMMAND", "未知コマンドを拒否する");
+        Check(
+            "status.json",
+            Call("status.json", ControlProtocol.Status + " " + ControlProtocol.StatusJson) == "OK {\"state\":\"running\"}",
+            "WebUI 用の状態を JSON で返す");
+        Check("log", Call("log", ControlProtocol.Log) == "OK {\"events\":[\"a\"]}", "入力イベントを返す");
+        Check("reload", Call("reload", ControlProtocol.Reload) == "OK RELOADED", "設定の読み直しを受け付ける");
+        Check("reload.count", Volatile.Read(ref reloadCount) == 1, "読み直しは 1 回だけ実行される");
 
         Check(
             "disconnect",

@@ -101,7 +101,7 @@ public static class Program
             server.Override = command => HandleCommand(command, state, server, engine, eventLog);
             server.Start();
 
-            using var supervisor = new HostSupervisor(controller, engine, state, eventLog);
+            var supervisor = new HostSupervisor(controller, engine, state, eventLog);
 
             SettingsServer? web = null;
             try
@@ -125,7 +125,20 @@ public static class Program
                 }
 
                 // 入力エンジンが動いていなければ起動する（多重起動の判定はエンジン側）。
-                if (!engine.IsRunning()) engine.Start();
+                if (engine.IsRunning())
+                {
+                    // 前回の本体が残したエンジンを再利用する場合は、保存済みの設定を読み直させる。
+                    engine.Forward(ControlProtocol.Reload);
+                }
+                else if (engine.Start())
+                {
+                    eventLog.Add("入力エンジンを起動しました。");
+                }
+                else
+                {
+                    eventLog.Add("入力エンジンを起動できませんでした（LeafHotKeyEngine.exe の配置を確認してください）。");
+                }
+
                 supervisor.Start();
 
                 ApplicationConfiguration.Initialize();
@@ -134,15 +147,6 @@ public static class Program
                     server,
                     web?.Url,
                     () => supervisor.BackendLabel,
-                    () => supervisor.IsAhkBackend,
-                    restartAhk: () =>
-                    {
-                        var response = engine.Forward(ControlProtocol.RestartBackend);
-                        eventLog.Add(response is null
-                            ? "入力エンジンが停止しているため、AHK を再起動できません。"
-                            : "AHK を再起動しました。");
-                        supervisor.RequestRefresh();
-                    },
                     statusText: () => supervisor.StatusText,
                     toggle: () =>
                     {
@@ -155,6 +159,7 @@ public static class Program
                     {
                         if (engine.Start()) eventLog.Add("入力エンジンを起動しました。");
                         else eventLog.Add("入力エンジンを起動できませんでした。");
+
                         supervisor.ResumeWatching();
                         supervisor.RequestRefresh();
                     });
@@ -233,7 +238,6 @@ public static class Program
             case ControlProtocol.Pause:
             case ControlProtocol.Resume:
             case ControlProtocol.Reload:
-            case ControlProtocol.RestartBackend:
                 return engine.Forward(command) ?? StoppedResponse(verb);
 
             case ControlProtocol.Shutdown:

@@ -14,7 +14,6 @@ public sealed class ControlServer : IDisposable
     private readonly Func<string>? _statusJson;
     private readonly Func<string>? _logJson;
     private readonly Func<bool>? _reload;
-    private readonly Func<bool>? _restartBackend;
     private readonly CancellationTokenSource _cts = new();
     private readonly string _pipeName;
     private readonly string _ownerSid;
@@ -29,15 +28,13 @@ public sealed class ControlServer : IDisposable
         string? pipeName = null,
         Func<string>? statusJson = null,
         Func<string>? logJson = null,
-        Func<bool>? reload = null,
-        Func<bool>? restartBackend = null)
+        Func<bool>? reload = null)
     {
         _state = state;
         _pipeName = pipeName ?? ControlProtocol.PipeName;
         _statusJson = statusJson;
         _logJson = logJson;
         _reload = reload;
-        _restartBackend = restartBackend;
         _ownerSid = WindowsIdentity.GetCurrent().User?.Value ?? string.Empty;
     }
 
@@ -209,9 +206,6 @@ public sealed class ControlServer : IDisposable
             case ControlProtocol.Reload:
                 if (_reload is null) return ControlProtocol.Error("UNAVAILABLE");
                 return _reload() ? ControlProtocol.Ok("RELOADED") : ControlProtocol.Error("RELOAD_FAILED");
-            case ControlProtocol.RestartBackend:
-                if (_restartBackend is null) return ControlProtocol.Error("UNAVAILABLE");
-                return _restartBackend() ? ControlProtocol.Ok("RESTARTED") : ControlProtocol.Error("RESTART_FAILED");
             case ControlProtocol.Pause:
                 return _state.Pause()
                     ? ControlProtocol.Ok("PAUSED")

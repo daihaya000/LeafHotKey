@@ -36,7 +36,7 @@ public sealed class HostSupervisor : IDisposable
     public string BackendLabel { get; private set; } = "-";
 
     /// <summary>AutoHotkey バックエンドで動作しているか。</summary>
-    public bool IsAhkBackend { get; private set; }
+    private bool IsAhkBackend { get; set; }
 
     public void Start()
     {

@@ -92,7 +92,7 @@
 
 | コマンド | 確認内容 | 直近の結果 |
 | --- | --- | --- |
-| `LeafHotKeyEngine.exe --check <report>` | 制御チャネル、多重起動防止、終了理由の区別 | 18 PASS |
+| `LeafHotKeyEngine.exe --check <report>` | 制御チャネル、多重起動防止、終了理由の区別、状態JSON・ログ・再読み込み | 22 PASS |
 | `--check-send <report>` | SendInput の実送信と配列解決 | 13 PASS |
 | `--check-engine <report> [settings]` | 判定、前置キー、保持キーの解放、IME 設定 | 43 PASS |
 | `--check-hook <report>` | 実フック経由の変換・抑止・停止時解放 | 14 PASS |

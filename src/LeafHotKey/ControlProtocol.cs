@@ -20,9 +20,6 @@ public static class ControlProtocol
     /// <summary>設定ファイルを読み直して反映する。</summary>
     public const string Reload = "RELOAD";
 
-    /// <summary>AutoHotkey バックエンドを起動し直す。</summary>
-    public const string RestartBackend = "RESTART-AHK";
-
     /// <summary>エンジンが動作していない場合に本体が返す状態。</summary>
     public const string StateStopped = "STOPPED";
 
