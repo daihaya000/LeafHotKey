@@ -683,6 +683,10 @@
         : `内蔵エンジン·${result.payload.engineInstalled === false ? "未設置" : "動作中"}`;
     }
 
+    // AHK 使用中は、この画面のプロファイルが使われないことを明示する。
+    const backendNotice = el("profile-backend-notice");
+    if (backendNotice) backendNotice.hidden = result.payload.backend !== "ahk";
+
     const fact = el("runtime-copy");
     if (result.payload.engineInstalled === false) fact.textContent = "入力フックを設置できていません。";
     renderOverviewActivityStatus();
