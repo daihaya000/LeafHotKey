@@ -92,7 +92,20 @@ public static class KeyResolver
             _ => 0,
         };
 
-        return virtualKey != 0;
+        if (virtualKey != 0) return true;
+
+        // 文字キー（現在の配列で刻印されるキー）も引けるようにする。
+        if (keyName.Length == 1)
+        {
+            var scan = NativeMethods.VkKeyScanEx(keyName[0], CurrentLayout);
+            if (scan != -1)
+            {
+                virtualKey = (ushort)(scan & 0xFF);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static IReadOnlyDictionary<string, ushort> BuildVirtualKeys()

@@ -20,6 +20,12 @@ public interface IKeySink
     /// 検証用の差し替え先や判定できない環境では true を返し、再送の判断を誤らない。
     /// </summary>
     bool VerifyKeyDown(string keyName) => true;
+
+    /// <summary>
+    /// 修飾キーが実際に解放されたかを確かめる。
+    /// 固まったままになるのを防ぐため、解放も確認して必要なら送り直す。
+    /// </summary>
+    bool VerifyKeyUp(string keyName) => true;
 }
 
 /// <summary>
@@ -62,7 +68,7 @@ public sealed class InputEngineCore
 
         foreach (var modifier in modifiers)
         {
-            _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Up, SendModifiers.None) });
+            SendUp(modifier);
         }
 
         _activeHolds.Remove(releaseKey);
@@ -98,12 +104,22 @@ public sealed class InputEngineCore
     {
         foreach (var modifier in _activeHolds.Values.SelectMany(list => list).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Up, SendModifiers.None) });
+            SendUp(modifier);
         }
 
         _activeHolds.Clear();
         _heldPrefixes.Clear();
         _suppressedDownKeys.Clear();
+    }
+
+    /// <summary>解放を送り、実際に離れたかを確かめる（離れていなければ一度だけ送り直す）。</summary>
+    private void SendUp(string modifier)
+    {
+        foreach (var attempt in Enumerable.Range(0, 2))
+        {
+            _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Up, SendModifiers.None) });
+            if (_sink.VerifyKeyUp(modifier)) break;
+        }
     }
 
     public InputDecision OnKeyDown(string key, SendModifiers modifiers)
@@ -188,7 +204,7 @@ public sealed class InputEngineCore
         {
             foreach (var modifier in holdModifiers)
             {
-                _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Up, SendModifiers.None) });
+                SendUp(modifier);
             }
 
             _activeHolds.Remove(key);

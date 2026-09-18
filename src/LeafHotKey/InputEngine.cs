@@ -64,6 +64,12 @@ public sealed class InputEngine : IDisposable
             if (!KeyResolver.TryVirtualKeyFor(keyName, out var virtualKey)) return true;
             return (NativeMethods.GetAsyncKeyState(virtualKey) & 0x8000) != 0;
         }
+
+        public bool VerifyKeyUp(string keyName)
+        {
+            if (!KeyResolver.TryVirtualKeyFor(keyName, out var virtualKey)) return true;
+            return (NativeMethods.GetAsyncKeyState(virtualKey) & 0x8000) == 0;
+        }
     }
 
     /// <summary>入力変換の有効・無効。無効化時は保持中のキーを解放する。</summary>

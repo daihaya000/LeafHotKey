@@ -20,6 +20,29 @@ public static class EngineSelfCheck
         }
     }
 
+    /// <summary>解放が一度だけ届かない環境を再現する送信先。</summary>
+    private sealed class StubbornSink : IKeySink
+    {
+        private bool _released;
+
+        public List<string> Sent { get; } = new();
+
+        public SendResult Send(IReadOnlyList<SendToken> tokens)
+        {
+            Sent.Add(string.Join(" ", tokens.Select(token => token.ToString())));
+            return new SendResult { SentEvents = tokens.Count, Unresolved = Array.Empty<string>() };
+        }
+
+        public bool VerifyKeyDown(string keyName) => true;
+
+        public bool VerifyKeyUp(string keyName)
+        {
+            if (_released) return true;
+            _released = true;
+            return false;
+        }
+    }
+
     public static int Run(string? reportPath, string? settingsPath)
     {
         var path = reportPath ?? Path.Combine(Path.GetTempPath(), "leafhotkey-enginecheck.txt");
@@ -212,6 +235,18 @@ public static class EngineSelfCheck
             KeyResolver.TryVirtualKeyFor("MButton", out var mbutton) && mbutton == 0x04 &&
             !KeyResolver.TryVirtualKeyFor("NoSuchKey", out _),
             "保持キーの仮想キーを引ける");
+
+        // 解放が効かない環境でも固まらないよう、確認して送り直す。
+        var stubbornSink = new StubbornSink();
+        var stubbornEngine = new InputEngineCore(stubbornSink);
+        stubbornEngine.SetActiveProfile(explorer);
+        stubbornEngine.OnKeyDown("f13", SendModifiers.None);
+        stubbornSink.Sent.Clear();
+        stubbornEngine.OnKeyUp("f13", SendModifiers.None);
+        Check(
+            "hold.release-retry",
+            stubbornSink.Sent.Count == 2 && stubbornSink.Sent[0] == "{Shift} up" && stubbornSink.Sent[1] == "{Shift} up",
+            $"解放が届かなければ送り直す（実際: {string.Join(" / ", stubbornSink.Sent)}）");
 
         // IME 無効化は設定で切り替えられ、保存時に反映される。
         using (var live = new InputEngine(Array.Empty<HotkeyProfile>(), disableIme: false))
