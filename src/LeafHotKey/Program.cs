@@ -160,7 +160,12 @@ public static class Program
                     ahk.Stop();
                     if (previous.Mode == InputBackend.Ahk)
                     {
-                        engine.Start();
+                        // 再開に失敗した場合は、AHK停止後に無入力のまま Running にしない。
+                        if (!engine.Start())
+                        {
+                            state.Pause();
+                            return;
+                        }
                     }
 
                     engine.Enabled = state.State == RuntimeState.Running;
