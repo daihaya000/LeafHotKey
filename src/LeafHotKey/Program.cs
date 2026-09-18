@@ -184,7 +184,28 @@ public static class Program
                     }
 
                     ApplicationConfiguration.Initialize();
-                    using var tray = new TrayApplication(state, server, web?.Url, () => backend.Mode == InputBackend.Ahk ? "AutoHotkey（バックエンド）" : "内蔵エンジン");
+                    using var tray = new TrayApplication(
+                        state,
+                        server,
+                        web?.Url,
+                        () => backend.Mode == InputBackend.Ahk ? "AutoHotkey（バックエンド）" : "内蔵エンジン",
+                        () => backend.Mode == InputBackend.Ahk,
+                        () =>
+                        {
+                            ahk.Stop();
+                            ahk.Start(backend);
+                        });
+
+                    // AHK の生存監視とスクリプト更新の追従。
+                    using var supervision = new System.Windows.Forms.Timer { Interval = 2000 };
+                    supervision.Tick += (_, _) =>
+                    {
+                        if (backend.Mode != InputBackend.Ahk) return;
+                        ahk.Tick(backend);
+                        if (ahk.ConsumeNotice() is { } notice) tray.Notify(notice);
+                    };
+                    supervision.Start();
+
                     Action requestRestart = () => restartRequested = true;
                     tray.RestartRequested += requestRestart;
                     Application.Run(tray);
@@ -196,6 +217,9 @@ public static class Program
 
                     // ゲーム保護の退避を含め、終了前に必ずフック解除とキー解放を行う。
                     engine.Stop();
+
+                    // AHK は外部プロセスなので、ホスト終了時は残す（内蔵へ戻す時だけ停止する）。
+                    ahk.Release();
 
                     // 終了理由が未設定のまま Application.Run を抜けた場合も手動終了として扱う。
                     if (state.ExitReason == ExitReason.None) state.BeginShutdown(ExitReason.Manual);
@@ -233,6 +257,9 @@ public static class Program
             activeProfile = engine.ActiveProfileName,
             backend = engine.Installed ? "builtin" : "ahk",
             backendStatus = ahk.Status,
+            backendScript = ahk.ScriptPath,
+            backendPid = ahk.ProcessId,
+            backendRestarts = ahk.Restarts,
         });
 
     /// <summary>実行ディレクトリから上位へ defaults/settings.json を探す。</summary>

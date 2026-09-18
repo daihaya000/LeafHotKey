@@ -72,6 +72,17 @@ public static class BackendSelfCheck
             Check("backend.idle", !backend.IsRunning && backend.Status == "停止中", "起動前は停止状態を報告する");
             var missing = new BackendSettings { Mode = InputBackend.Ahk, AhkScript = "Z:/absent/MySet.ahk", AhkExecutable = string.Empty };
             Check("backend.start.missing", !backend.Start(missing) && backend.Status == "スクリプトが見つかりません", "スクリプトが無ければ起動せず理由を返す");
+
+            // 監視の判断（落ちたら戻し、外部インスタンスがあれば何もしない）。
+            Check("backend.restart.exited", AhkBackend.ShouldRestart(true, false, false, 0, 3), "落ちていれば再起動する");
+            Check("backend.restart.external", !AhkBackend.ShouldRestart(true, true, false, 0, 3), "外部の AutoHotkey が動いていれば起動しない");
+            Check("backend.restart.released", !AhkBackend.ShouldRestart(true, false, true, 0, 3), "ホスト終了で手放したものは再起動しない");
+            Check("backend.restart.limit", !AhkBackend.ShouldRestart(true, false, false, 3, 3), "再試行の上限で止める");
+            Check("backend.restart.alive", !AhkBackend.ShouldRestart(false, false, false, 0, 3), "動いている間は何もしない");
+
+            // ホスト終了時はプロセスを止めずに手放す。
+            backend.Release();
+            Check("backend.release", !backend.IsRunning && backend.Status.Contains("ホスト終了", StringComparison.Ordinal), "ホスト終了時は手放して状態を残す");
         }
 
         File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);

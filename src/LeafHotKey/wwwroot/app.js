@@ -687,6 +687,13 @@
     const backendNotice = el("profile-backend-notice");
     if (backendNotice) backendNotice.hidden = result.payload.backend !== "ahk";
 
+    const backendDetail = el("backend-detail");
+    if (backendDetail) {
+      backendDetail.textContent = result.payload.backend === "ahk"
+        ? `PID ${result.payload.backendPid ?? "-"} · 再起動 ${result.payload.backendRestarts ?? 0} 回`
+        : "内蔵フックを設置しています。";
+    }
+
     const fact = el("runtime-copy");
     if (result.payload.engineInstalled === false) fact.textContent = "入力フックを設置できていません。";
     renderOverviewActivityStatus();

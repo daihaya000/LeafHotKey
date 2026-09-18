@@ -15,16 +15,26 @@ public sealed class TrayApplication : ApplicationContext
 
     private readonly string? _settingsUrl;
     private readonly Func<string>? _backendLabel;
+    private readonly Func<bool>? _isAhkBackend;
+    private readonly Action? _restartAhk;
 
     /// <summary>すべてのリソースを解放した後に、本体を起動し直す要求。</summary>
     public event Action? RestartRequested;
 
-    public TrayApplication(HostState state, ControlServer server, string? settingsUrl = null, Func<string>? backendLabel = null)
+    public TrayApplication(
+        HostState state,
+        ControlServer server,
+        string? settingsUrl = null,
+        Func<string>? backendLabel = null,
+        Func<bool>? isAhkBackend = null,
+        Action? restartAhk = null)
     {
         _state = state;
         _server = server;
         _settingsUrl = settingsUrl;
         _backendLabel = backendLabel;
+        _isAhkBackend = isAhkBackend;
+        _restartAhk = restartAhk;
 
         _toggleItem = new ToolStripMenuItem("一時停止", null, (_, _) => Toggle());
         var restartItem = new ToolStripMenuItem("再起動", null, (_, _) => RequestRestart());
@@ -34,12 +44,15 @@ public sealed class TrayApplication : ApplicationContext
             Enabled = _settingsUrl is not null,
         };
         var versionItem = new ToolStripMenuItem(ReadCommitLabel()) { Enabled = false };
+        var ahkRestartItem = new ToolStripMenuItem("AHKを再起動", null, (_, _) => _restartAhk?.Invoke());
 
         var menu = new ContextMenuStrip();
+        menu.Opening += (_, _) => ahkRestartItem.Enabled = _isAhkBackend?.Invoke() == true;
         menu.Items.Add(versionItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(settingsItem);
         menu.Items.Add(restartItem);
+        menu.Items.Add(ahkRestartItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_toggleItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -75,6 +88,20 @@ public sealed class TrayApplication : ApplicationContext
         {
             // 既定のブラウザが無い環境では何もしない。
         }
+    }
+
+    /// <summary>トレイに通知（バルーン）を出す。フックやバックエンドの異常に気付けるようにする。</summary>
+    public void Notify(string message)
+    {
+        if (_icon.ContextMenuStrip is { } menu && menu.InvokeRequired)
+        {
+            menu.BeginInvoke(() => Notify(message));
+            return;
+        }
+
+        _icon.BalloonTipTitle = "LeafHotKey";
+        _icon.BalloonTipText = message;
+        _icon.ShowBalloonTip(5000);
     }
 
     private static string ReadCommitLabel()

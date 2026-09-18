@@ -10,12 +10,47 @@ namespace LeafHotKey;
 /// </summary>
 public sealed class AhkBackend : IDisposable
 {
+    private const int MaxRestartAttempts = 3;
+
     private Process? _process;
+    private DateTimeOffset _startedAt;
+    private DateTime _scriptStamp;
+    private int _restartAttempts;
+    private string? _notice;
 
     /// <summary>直近の状態（トレイと設定画面に表示する）。</summary>
     public string Status { get; private set; } = "停止中";
 
+    /// <summary>このアプリが再起動した回数。</summary>
+    public int Restarts { get; private set; }
+
+    /// <summary>実行中のスクリプト。</summary>
+    public string ScriptPath { get; private set; } = string.Empty;
+
     public bool IsRunning => _process is { HasExited: false };
+
+    public int? ProcessId
+    {
+        get
+        {
+            try
+            {
+                return IsRunning ? _process!.Id : null;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+    }
+
+    /// <summary>トレイへ一度だけ出す通知。取り出すと消える。</summary>
+    public string? ConsumeNotice()
+    {
+        var notice = _notice;
+        _notice = null;
+        return notice;
+    }
 
     /// <summary>スクリプトを起動する。既に起動済みなら何もしない。</summary>
     public bool Start(BackendSettings settings)
@@ -51,6 +86,13 @@ public sealed class AhkBackend : IDisposable
             });
 
             Status = _process is null ? "起動に失敗しました" : "動作中";
+            if (_process is not null)
+            {
+                _startedAt = DateTimeOffset.Now;
+                ScriptPath = script;
+                _scriptStamp = File.GetLastWriteTimeUtc(script);
+            }
+
             return _process is not null;
         }
         catch (Win32Exception ex)
@@ -80,6 +122,104 @@ public sealed class AhkBackend : IDisposable
             _process = null;
             Status = "停止中";
         }
+    }
+
+    /// <summary>プロセスは止めずに監視から外す（ホスト終了時）。AHK 側の保護に任せる。</summary>
+    public void Release()
+    {
+        _process?.Dispose();
+        _process = null;
+        Status = "停止中（ホスト終了）";
+    }
+
+    /// <summary>
+    /// 数秒ごとの監視。落ちていれば再起動し、スクリプトが更新されていれば読み直させる。
+    /// ゲーム保護などで AHK 自身が入れ替わっている場合は、外部インスタンスを尊重して何もしない。
+    /// </summary>
+    public void Tick(BackendSettings settings)
+    {
+        if (_process is null) return;
+
+        if (_process.HasExited)
+        {
+            _process.Dispose();
+            _process = null;
+
+            var external = ExternalInstanceRunning();
+            if (!ShouldRestart(true, external, false, _restartAttempts, MaxRestartAttempts))
+            {
+                Status = external
+                    ? "停止中（外部の AutoHotkey が動作中）"
+                    : _restartAttempts >= MaxRestartAttempts ? "再起動を中止しました" : "停止中";
+                return;
+            }
+
+            _restartAttempts++;
+            Start(settings);
+            if (IsRunning)
+            {
+                Restarts++;
+                _notice = $"AutoHotkey を再起動しました（{_restartAttempts} 回目）";
+            }
+
+            return;
+        }
+
+        // しばらく安定して動いていれば再試行回数を戻す。
+        if (_restartAttempts > 0 && DateTimeOffset.Now - _startedAt > TimeSpan.FromMinutes(2)) _restartAttempts = 0;
+
+        if (ScriptPath.Length == 0) return;
+
+        try
+        {
+            // スクリプトが更新されたら読み直させる（編集内容を反映）。
+            if (File.GetLastWriteTimeUtc(ScriptPath) > _scriptStamp)
+            {
+                Stop();
+                Start(settings);
+                if (IsRunning) _notice = "スクリプトの更新を検出し、AutoHotkey を読み直しました";
+            }
+        }
+        catch (IOException)
+        {
+            // 読み取り中の一時的な失敗は次回に任せる。
+        }
+    }
+
+    /// <summary>監視の判断（検証で固定できるよう純関数にする）。</summary>
+    internal static bool ShouldRestart(bool processExited, bool externalInstanceRunning, bool releasedByHost, int attempts, int maxAttempts)
+        => processExited && !externalInstanceRunning && !releasedByHost && attempts < maxAttempts;
+
+    /// <summary>他の AutoHotkey が動いているか（restart_ahk.bat などが起動した場合）。</summary>
+    private static bool ExternalInstanceRunning()
+    {
+        try
+        {
+            foreach (var process in Process.GetProcesses())
+            {
+                using (process)
+                {
+                    string name;
+                    try
+                    {
+                        name = process.ProcessName;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        continue;
+                    }
+
+                    if (name.StartsWith("AutoHotkey", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // 列挙に失敗した場合は「無い」と断定せず、再起動しない側に寄せる。
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>設定されたスクリプトの実体。未設定や存在しない場合は null。</summary>
@@ -131,5 +271,4 @@ public sealed class AhkBackend : IDisposable
         return null;
     }
 
-    public void Dispose() => Stop();
-}
+    public void Dispose() => Stop();}

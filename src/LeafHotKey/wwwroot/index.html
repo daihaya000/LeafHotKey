@@ -170,6 +170,7 @@
               <div class="card-header"><div><h2 id="backend-heading">入力バックエンド</h2><p class="fine">どちらか一方だけが動作します。切り替えるともう一方は停止します。</p></div><span class="badge" id="backend-state">-</span></div>
               <div class="settings-list" style="margin-top:16px">
                 <div class="settings-row"><div class="settings-row-main"><strong>使用するエンジン</strong><p>不具合時は AutoHotkey に切り替えて従来のスクリプトで運用できます。</p></div><div class="field-inline"><select id="backend-mode" aria-label="入力バックエンド"><option value="builtin">内蔵エンジン</option><option value="ahk">AutoHotkey</option></select></div></div>
+                <div class="settings-row"><div class="settings-row-main"><strong>AHK の見守り</strong><p>AutoHotkey が落ちたら自動で起動し直します。スクリプトを編集すると読み直します（最大3回まで）。本体を終了しても AHK は動作を続けます。</p></div><span class="fine" id="backend-detail">-</span></div>
                 <div class="settings-row"><div class="settings-row-main"><strong>AHK スクリプト</strong><p>実行する .ahk ファイルのフルパスです。</p></div><div class="field-inline field-inline-wide"><input type="text" id="backend-script" spellcheck="false" placeholder="C:/Users/…/MySet.ahk" aria-label="AHK スクリプトのパス" /></div></div>
                 <div class="settings-row"><div class="settings-row-main"><strong>AutoHotkey 本体</strong><p>空ならスクリプトと同じフォルダーから自動検出します。</p></div><div class="field-inline field-inline-wide"><input type="text" id="backend-executable" spellcheck="false" placeholder="空欄で自動検出" aria-label="AutoHotkey 本体のパス" /></div></div>
               </div>
