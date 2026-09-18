@@ -104,17 +104,23 @@ public sealed class InputEngineCore
             // 前置キーとしても使うキーは、単体動作を離すときに判定する。
             if (IsPrefixKey(profile, key))
             {
-                _heldPrefixes[key] = false;
-
-                // 前置キー自身が Hold の割り当てを持つ場合は、押下中から保持する。
-                // 離上時まで遅延すると、F16 -> Space が一瞬のタップになってしまう。
-                if (exact.Kind == HotkeyActionKind.Hold)
+                // AHK の ~ 付き前置キー（*~key）は、単体動作を押下時に発火する。
+                // 離上まで遅延するのは、~ が無い前置キーだけ。
+                var tilde = HasPassthrough(profile, key);
+                _heldPrefixes[key] = tilde;
+                if (tilde)
                 {
-                    var holdDecision = Execute(exact, key, firedOnKeyUp: false);
-                    return HasPassthrough(profile, key) ? InputDecision.PassThrough : holdDecision;
+                    Execute(exact, key, firedOnKeyUp: false);
+                    return InputDecision.PassThrough;
                 }
 
-                return HasPassthrough(profile, key) ? InputDecision.PassThrough : InputDecision.Suppress;
+                // ~ が無くても Hold は押下中から保持する（離上では一瞬のタップになる）。
+                if (exact.Kind == HotkeyActionKind.Hold)
+                {
+                    return Execute(exact, key, firedOnKeyUp: false);
+                }
+
+                return InputDecision.Suppress;
             }
 
             return Execute(exact, key, firedOnKeyUp: false);

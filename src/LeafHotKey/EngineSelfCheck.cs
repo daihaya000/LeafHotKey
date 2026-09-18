@@ -124,7 +124,10 @@ public static class EngineSelfCheck
         sink.Sent.Clear();
         var prefixDown = engine.OnKeyDown("MButton", SendModifiers.None);
         Check("prefix.down", prefixDown == InputDecision.PassThrough, "*~MButton があるため中ボタンの元動作は通す");
-        Check("prefix.down.nosend", sink.Sent.Count == 0, "前置キーを押しただけでは送信しない");
+        Check(
+            "prefix.down.send",
+            sink.Sent.Count == 1 && sink.Sent[0] == "{Enter}",
+            $"~ 付き前置キーの単体動作は押下時に発火する（実際: {string.Join(" / ", sink.Sent)}）");
         Check("prefix.held", engine.HeldPrefixes.Contains("MButton"), "前置キーを押下状態として保持する");
 
         sink.Sent.Clear();
@@ -137,15 +140,19 @@ public static class EngineSelfCheck
         Check("prefix.up.passthrough", prefixUpAfterCombo == InputDecision.PassThrough, "元の中ボタン解放は通す");
         Check("prefix.released", engine.HeldPrefixes.Count == 0, "離したら前置状態を消す");
 
-        // 組み合わせを使わなければ単体動作（MButton → {Enter}）。
+        // 組み合わせを使わなければ単体動作（MButton → {Enter}）は押下時に 1 回だけ。
         sink.Sent.Clear();
         engine.OnKeyDown("MButton", SendModifiers.None);
+        Check("prefix.standalone.down", sink.Sent.Count == 1 && sink.Sent[0] == "{Enter}", $"単体の中ボタンは Enter を送る（実際: {string.Join(" / ", sink.Sent)}）");
+        sink.Sent.Clear();
         engine.OnKeyUp("MButton", SendModifiers.None);
-        Check("prefix.standalone", sink.Sent.Count == 1 && sink.Sent[0] == "{Enter}", $"単体の中ボタンは Enter を送る（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("prefix.standalone.up", sink.Sent.Count == 0, "解放時には同じ単体動作を繰り返さない");
 
         // 前置キー + Hold（MButton & f13 は {Blind} なしの Ctrl 保持）。
         sink.Sent.Clear();
         engine.OnKeyDown("MButton", SendModifiers.None);
+        Check("prefix.hold.press", sink.Sent.Count == 1 && sink.Sent[0] == "{Enter}", "組み合わせ前の押下で単体動作が出る");
+        sink.Sent.Clear();
         engine.OnKeyDown("f13", SendModifiers.None);
         Check("prefix.hold", sink.Sent.Count == 1 && sink.Sent[0] == "{Ctrl} down", $"MButton & f13 は Ctrl を保持する（実際: {string.Join(" / ", sink.Sent)}）");
         sink.Sent.Clear();

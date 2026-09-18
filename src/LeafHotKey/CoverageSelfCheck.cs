@@ -127,18 +127,34 @@ public static class CoverageSelfCheck
 
         if (rule.Trigger.Prefix is not { } prefix) return expected;
 
-        // Hold を持つ前置キーは、組み合わせ入力中も押下状態を維持する。
-        var prefixHold = profile.Rules.FirstOrDefault(candidate =>
+        // ~ 付きの前置キーは、単体動作を押下時に発火する（AHK と同じ）。
+        var standalone = profile.Rules.FirstOrDefault(candidate =>
             candidate.Trigger.Prefix is null &&
-            string.Equals(candidate.Trigger.Key, prefix, StringComparison.OrdinalIgnoreCase) &&
-            candidate.Kind == HotkeyActionKind.Hold &&
-            string.Equals(candidate.ReleaseOn, prefix, StringComparison.OrdinalIgnoreCase));
-        if (prefixHold?.HoldModifier is not { } prefixModifier) return expected;
+            !candidate.Trigger.AnyModifier &&
+            candidate.Trigger.Modifiers == SendModifiers.None &&
+            string.Equals(candidate.Trigger.Key, prefix, StringComparison.OrdinalIgnoreCase));
+        var tilde = profile.Rules.Any(candidate =>
+            candidate.Kind == HotkeyActionKind.Passthrough &&
+            candidate.Trigger.PassThroughNative &&
+            string.Equals(candidate.Trigger.Key, prefix, StringComparison.OrdinalIgnoreCase));
+        if (standalone is null || !tilde) return expected;
 
-        return new[] { $"{{{prefixModifier}}} down" }
-            .Concat(expected)
-            .Append($"{{{prefixModifier}}} up")
-            .ToList();
+        // Hold の前置キーは、組み合わせ入力中も押下状態を維持する。
+        if (standalone.Kind == HotkeyActionKind.Hold && standalone.HoldModifier is { } prefixModifier)
+        {
+            return new[] { $"{{{prefixModifier}}} down" }
+                .Concat(expected)
+                .Append($"{{{prefixModifier}}} up")
+                .ToList();
+        }
+
+        if (standalone.Kind == HotkeyActionKind.Send)
+        {
+            var pressed = standalone.Sequences.Select(sequence => string.Join(" ", sequence.Select(token => token.ToString())));
+            return pressed.Concat(expected).ToList();
+        }
+
+        return expected;
     }
 
     private static string Describe(HotkeyTrigger trigger)
