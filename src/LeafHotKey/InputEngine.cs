@@ -35,7 +35,13 @@ public sealed class InputEngine : IDisposable
         _profiles = profiles;
         _sender = sender ?? new KeySender();
         _disableIme = disableIme;
-        _core = new InputEngineCore(new ImeAwareSink(_sender, _foreground, () => _disableIme));
+        _core = new InputEngineCore(new ImeAwareSink(_sender, _foreground, () => _disableIme))
+        {
+            // 前置キーの取りこぼしを物理状態で補う。
+            PhysicalKeyState = name => KeyResolver.TryVirtualKeyFor(name, out var virtualKey)
+                ? (NativeMethods.GetAsyncKeyState(virtualKey) & 0x8000) != 0
+                : null,
+        };
     }
 
     /// <summary>送信前に前面ウィンドウの IME をオフにする送信先（元 AHK の Snd 相当）。</summary>

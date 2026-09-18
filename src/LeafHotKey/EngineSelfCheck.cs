@@ -211,6 +211,30 @@ public static class EngineSelfCheck
         sink.Sent.Clear();
         Check("unmapped", engine.OnKeyDown("q", SendModifiers.None) == InputDecision.PassThrough && sink.Sent.Count == 0, "未割り当てのキーは通過させる");
 
+        // 前置キーの物理状態による補正（押下を取りこぼしても組み合わせを成立させる）。
+        var blender = profiles.Single(profile => profile.Id == "blender");
+        var prefixSink = new RecordingSink();
+        var prefixEngine = new InputEngineCore(prefixSink)
+        {
+            PhysicalKeyState = name => name.Equals("MButton", StringComparison.OrdinalIgnoreCase),
+        };
+        prefixEngine.SetActiveProfile(blender);
+        prefixSink.Sent.Clear();
+        var physicalCombo = prefixEngine.OnKeyDown("f22", SendModifiers.None);
+        Check(
+            "prefix.physical",
+            physicalCombo == InputDecision.Suppress && prefixSink.Sent.Count == 1 && prefixSink.Sent[0] == "Shift+i",
+            $"押下イベントを逃しても物理的に押されていれば組み合わせを成立させる（実際: {string.Join(" / ", prefixSink.Sent)}）");
+
+        // 前置キーが物理的に離れていれば、残った前置状態を捨てる。
+        prefixEngine.PhysicalKeyState = _ => false;
+        prefixSink.Sent.Clear();
+        prefixEngine.OnKeyDown("f22", SendModifiers.None);
+        Check(
+            "prefix.physical.release",
+            prefixSink.Sent.Count == 1 && prefixSink.Sent[0] == "Shift, Alt+o",
+            $"離れていれば単体の割り当てへ戻る（実際: {string.Join(" / ", prefixSink.Sent)}）");
+
         // 保持の取りこぼし対策（解除の見逃しを補う）。
         engine.SetActiveProfile(explorer);
         sink.Sent.Clear();

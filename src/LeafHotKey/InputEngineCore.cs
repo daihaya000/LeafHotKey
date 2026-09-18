@@ -55,6 +55,12 @@ public sealed class InputEngineCore
     /// <summary>判定の経過を残すための記録先（切り分け用）。</summary>
     public Action<string>? Trace { get; set; }
 
+    /// <summary>
+    /// キーが物理的に押されているかを調べる（true/false、判定不能は null）。
+    /// フックの取りこぼしを物理状態で補うために使う。
+    /// </summary>
+    public Func<string, bool?>? PhysicalKeyState { get; set; }
+
     public IReadOnlyCollection<string> HeldPrefixes => _heldPrefixes.Keys;
 
     public IReadOnlyCollection<string> ActiveHoldModifiers =>
@@ -137,6 +143,9 @@ public sealed class InputEngineCore
         var profile = ActiveProfile;
         Trace?.Invoke($"down {key} mods={modifiers} profile={profile?.Id ?? "-"} prefixes=[{string.Join(",", _heldPrefixes.Keys)}] holds=[{string.Join(",", ActiveHoldModifiers)}]");
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
+
+        // 前置キーの押下/解放を取りこぼしても、物理状態が正なら前置として扱う（AHK と同じ発想）。
+        SyncPrefixes(profile);
 
         // 1. 押されている前置キーとの組み合わせを最優先する。
         foreach (var prefix in _heldPrefixes.Keys.ToArray())
@@ -315,4 +324,35 @@ public sealed class InputEngineCore
 
     private static bool KeyMatches(string ruleKey, string key)
         => string.Equals(ruleKey, key, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>プロファイルが前置キーとして使っているキー名。</summary>
+    private static IEnumerable<string> PrefixKeys(HotkeyProfile profile) => profile.Rules
+        .Where(rule => rule.Trigger.Prefix is { Length: > 0 })
+        .Select(rule => rule.Trigger.Prefix!)
+        .Distinct(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 前置キーの状態を物理キーに合わせる。
+    /// 押下イベントを見逃しても物理的に押されていれば組み合わせを成立させ、
+    /// 解放を見逃しても離れていれば前置状態を捨てる。
+    /// </summary>
+    private void SyncPrefixes(HotkeyProfile profile)
+    {
+        if (PhysicalKeyState is null) return;
+
+        foreach (var prefix in PrefixKeys(profile))
+        {
+            var down = PhysicalKeyState(prefix);
+            if (down is null) continue;
+
+            if (down.Value && !_heldPrefixes.ContainsKey(prefix))
+            {
+                _heldPrefixes[prefix] = false;
+                Trace?.Invoke($"prefix {prefix} held (physical)");
+                continue;
+            }
+
+            if (!down.Value && _heldPrefixes.Remove(prefix)) Trace?.Invoke($"prefix {prefix} released (physical)");
+        }
+    }
 }
