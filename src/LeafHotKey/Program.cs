@@ -268,18 +268,49 @@ public static class Program
     {
         try
         {
-            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            var launcher = FindRestartLauncher();
+            if (launcher is not null)
+            {
+                // トレイ再起動も通常起動と同じバッチを通し、ソース更新時の Release ビルド判定を行う。
+                // 旧プロセスが Mutex を解放してからバッチが --status を見るよう短く待つ。
+                var command = $"timeout /t 1 /nobreak >nul & call \"{launcher}\"";
+                using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+                    ArgumentList = { "/d", "/c", command },
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = Path.GetDirectoryName(launcher) ?? AppContext.BaseDirectory,
+                });
+                return process is null ? ExitCheckFailed : ExitOk;
+            }
+
+            // 発行物だけの環境にはリポジトリの起動バッチが無いため、従来どおり本体を直接再起動する。
+            using var fallback = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = Application.ExecutablePath,
                 UseShellExecute = true,
                 WorkingDirectory = AppContext.BaseDirectory,
             });
-            return process is null ? ExitCheckFailed : ExitOk;
+            return fallback is null ? ExitCheckFailed : ExitOk;
         }
         catch (System.ComponentModel.Win32Exception)
         {
             return ExitCheckFailed;
         }
+    }
+
+    private static string? FindRestartLauncher()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "Start-LeafHotKey.bat");
+            if (File.Exists(candidate)) return candidate;
+            directory = directory.Parent;
+        }
+
+        return null;
     }
 
     /// <summary>WebUI へ返す現在の状態。</summary>
