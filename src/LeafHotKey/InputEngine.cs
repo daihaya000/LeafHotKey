@@ -21,6 +21,13 @@ public sealed class InputEngine : IDisposable
     private IntPtr _mouseHook;
     private Thread? _thread;
     private uint _threadId;
+    private System.Threading.Timer? _holdWatchdog;
+
+    /// <summary>解除キーが物理的に押されているのを確認できたもの（誤解放を避ける）。</summary>
+    private readonly HashSet<string> _holdKeysSeenDown = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>保持した修飾キーが実際に押されたのを確認できたもの。</summary>
+    private readonly HashSet<string> _holdModifiersSeenDown = new(StringComparer.OrdinalIgnoreCase);
     private volatile bool _enabled = true;
 
     public InputEngine(IReadOnlyList<HotkeyProfile> profiles, bool disableIme = true, KeySender? sender = null)
@@ -50,6 +57,12 @@ public sealed class InputEngine : IDisposable
             // IME 操作に失敗しても送信自体は続ける（AHK も戻り値を見ていない）。
             if (_disableIme()) ImeController.Disable(_foreground.CurrentWindow());
             return _sender.Send(tokens);
+        }
+
+        public bool VerifyKeyDown(string keyName)
+        {
+            if (!KeyResolver.TryVirtualKeyFor(keyName, out var virtualKey)) return true;
+            return (NativeMethods.GetAsyncKeyState(virtualKey) & 0x8000) != 0;
         }
     }
 
@@ -94,8 +107,72 @@ public sealed class InputEngine : IDisposable
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
 
+        // 保持キーの取りこぼし（解除イベントの見逃し）を定期的に回収する。
+        _holdWatchdog = new System.Threading.Timer(_ => SweepHolds(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+
         return _ready.Wait(TimeSpan.FromSeconds(5)) && Installed;
     }
+
+    /// <summary>
+    /// 保持中のキーが既に離れていないかを確かめ、離れていれば解放する。
+    /// 解除イベントを取りこぼすと修飾キーが押しっぱなしになるため、AHK の KeyWait より確実にする。
+    /// </summary>
+    private void SweepHolds()
+    {
+        HoldSweeps++;
+        if (!_enabled) return;
+
+        var holds = _core.ActiveHolds;
+        if (holds.Count == 0)
+        {
+            _holdKeysSeenDown.Clear();
+            _holdModifiersSeenDown.Clear();
+            return;
+        }
+
+        // 修飾キーが外れていたら押し直す（アプリ側で解放された場合の安全網）。
+        // 一度も押下を確認できていない環境では触らない。
+        _core.ReassertHolds(modifier =>
+        {
+            if (KeyResolver.TryVirtualKeyFor(modifier, out var modifierKey) &&
+                (NativeMethods.GetAsyncKeyState(modifierKey) & 0x8000) != 0)
+            {
+                _holdModifiersSeenDown.Add(modifier);
+                return true;
+            }
+
+            if (!_holdModifiersSeenDown.Contains(modifier)) return true;
+
+            HoldReasserts++;
+            return false;
+        });
+
+        foreach (var hold in holds)
+        {
+            if (!KeyResolver.TryVirtualKeyFor(hold.Key, out var virtualKey)) continue;
+            if ((NativeMethods.GetAsyncKeyState(virtualKey) & 0x8000) != 0)
+            {
+                _holdKeysSeenDown.Add(hold.Key);
+                continue;
+            }
+
+            // 押下を確認できた後の「離れている」だけを、見逃した解除として扱う。
+            if (!_holdKeysSeenDown.Remove(hold.Key)) continue;
+
+            HoldReleases++;
+            _core.ReleaseHolds(hold.Key);
+        }
+    }
+
+    /// <summary>保持の安全網が動いた回数（検証用）。</summary>
+    public int HoldSweeps { get; private set; }
+
+    public int HoldReasserts { get; private set; }
+
+    public int HoldReleases { get; private set; }
+
+    /// <summary>現在保持している修飾キー（表示用）。</summary>
+    public IReadOnlyCollection<string> HeldModifiers => _core.ActiveHoldModifiers;
 
     /// <summary>
     /// フックを解除し、保持中のキーを解放する。
@@ -104,6 +181,8 @@ public sealed class InputEngine : IDisposable
     public void Stop()
     {
         _enabled = false;
+        _holdWatchdog?.Dispose();
+        _holdWatchdog = null;
         _core.ReleaseAll();
 
         if (_threadId != 0)

@@ -188,6 +188,31 @@ public static class EngineSelfCheck
         sink.Sent.Clear();
         Check("unmapped", engine.OnKeyDown("q", SendModifiers.None) == InputDecision.PassThrough && sink.Sent.Count == 0, "未割り当てのキーは通過させる");
 
+        // 保持の取りこぼし対策（解除の見逃しを補う）。
+        engine.SetActiveProfile(explorer);
+        sink.Sent.Clear();
+        engine.OnKeyDown("f13", SendModifiers.None);
+        Check("hold.map", engine.ActiveHolds.TryGetValue("f13", out var held) && held.Contains("Shift"), "解除キーごとに保持を追跡する");
+        sink.Sent.Clear();
+        engine.ReleaseHolds("f13");
+        Check("hold.force-release", sink.Sent.Count == 1 && sink.Sent[0] == "{Shift} up" && engine.ActiveHoldModifiers.Count == 0, $"見逃した解除を補って解放できる（実際: {string.Join(" / ", sink.Sent)}）");
+
+        sink.Sent.Clear();
+        engine.OnKeyDown("f14", SendModifiers.None);
+        sink.Sent.Clear();
+        engine.ReassertHolds(_ => false);
+        Check("hold.reassert", sink.Sent.Count == 1 && sink.Sent[0] == "{Ctrl} down", $"外れた保持を押し直せる（実際: {string.Join(" / ", sink.Sent)}）");
+        engine.ReleaseAll();
+        Check("hold.release-all.cleared", engine.ActiveHoldModifiers.Count == 0, "解放後は保持が残らない");
+
+        // 保持キーの物理判定に使う仮想キー。
+        Check(
+            "keys.virtual",
+            KeyResolver.TryVirtualKeyFor("f13", out var f13) && f13 == 0x7C &&
+            KeyResolver.TryVirtualKeyFor("MButton", out var mbutton) && mbutton == 0x04 &&
+            !KeyResolver.TryVirtualKeyFor("NoSuchKey", out _),
+            "保持キーの仮想キーを引ける");
+
         // IME 無効化は設定で切り替えられ、保存時に反映される。
         using (var live = new InputEngine(Array.Empty<HotkeyProfile>(), disableIme: false))
         {

@@ -14,6 +14,12 @@ public enum InputDecision
 public interface IKeySink
 {
     SendResult Send(IReadOnlyList<SendToken> tokens);
+
+    /// <summary>
+    /// 修飾キーが実際に押下状態になったかを確かめる。
+    /// 検証用の差し替え先や判定できない環境では true を返し、再送の判断を誤らない。
+    /// </summary>
+    bool VerifyKeyDown(string keyName) => true;
 }
 
 /// <summary>
@@ -44,6 +50,39 @@ public sealed class InputEngineCore
 
     public IReadOnlyCollection<string> ActiveHoldModifiers =>
         _activeHolds.Values.SelectMany(modifiers => modifiers).ToArray();
+
+    /// <summary>保持中の修飾キー（解除キー名→修飾キー）。取りこぼし検出に使う。</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> ActiveHolds =>
+        _activeHolds.ToDictionary(entry => entry.Key, entry => (IReadOnlyList<string>)entry.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>指定した解除キーの保持を解放する。取りこぼした解除を補うときに使う。</summary>
+    public void ReleaseHolds(string releaseKey)
+    {
+        if (!_activeHolds.TryGetValue(releaseKey, out var modifiers)) return;
+
+        foreach (var modifier in modifiers)
+        {
+            _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Up, SendModifiers.None) });
+        }
+
+        _activeHolds.Remove(releaseKey);
+    }
+
+    /// <summary>
+    /// 保持中の修飾キーが外れていれば押し直す。
+    /// 対象アプリや OS が途中で解放してしまうケースの安全網。
+    /// </summary>
+    public void ReassertHolds(Func<string, bool> isModifierDown)
+    {
+        foreach (var modifiers in _activeHolds.Values)
+        {
+            foreach (var modifier in modifiers)
+            {
+                if (isModifierDown(modifier)) continue;
+                _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Down, SendModifiers.None) });
+            }
+        }
+    }
 
     /// <summary>前面アプリが変わったときに呼ぶ。保持中のキーは必ず解放する。</summary>
     public void SetActiveProfile(HotkeyProfile? profile)
@@ -211,7 +250,19 @@ public sealed class InputEngineCore
                 // 同じ修飾キーを二重に押さない（解放漏れを防ぐ）。
                 if (!list.Contains(modifier, StringComparer.OrdinalIgnoreCase))
                 {
+                    foreach (var attempt in Enumerable.Range(0, 2))
+                    {
+                        _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Down, SendModifiers.None) });
+
+                        // 送信が無視された場合（対象アプリに拒否された等）は一度だけやり直す。
+                        if (_sink.VerifyKeyDown(modifier)) break;
+                    }
+
                     list.Add(modifier);
+                }
+                else if (!_sink.VerifyKeyDown(modifier))
+                {
+                    // 保持が途中で外れていたら押し直す（キーリピート時の安全網）。
                     _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Down, SendModifiers.None) });
                 }
 

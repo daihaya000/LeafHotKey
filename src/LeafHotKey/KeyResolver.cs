@@ -76,6 +76,25 @@ public static class KeyResolver
         _ => 0,
     };
 
+    /// <summary>
+    /// 台帳のキー名から仮想キーを引く（保持キーの取りこぼし検出用）。
+    /// マウスボタンや未知の名前は false を返し、呼び出し側は判定を諦める。
+    /// </summary>
+    public static bool TryVirtualKeyFor(string keyName, out ushort virtualKey)
+    {
+        if (VirtualKeys.TryGetValue(keyName, out virtualKey)) return true;
+
+        virtualKey = keyName switch
+        {
+            "MButton" => 0x04,
+            "LButton" => 0x01,
+            "RButton" => 0x02,
+            _ => 0,
+        };
+
+        return virtualKey != 0;
+    }
+
     private static IReadOnlyDictionary<string, ushort> BuildVirtualKeys()
     {
         var map = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase)
