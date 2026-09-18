@@ -575,9 +575,13 @@
   }
 
   function renderGeneralSettings() {
-    if (!settings) return;
-    const input = settings.input || {};
+    if (!settings) return;    const input = settings.input || {};
     setSwitch(el("ime-disable"), input.imeDisableBeforeSend !== false);
+
+    const backend = settings.backend || {};
+    el("backend-mode").value = backend.mode === "ahk" ? "ahk" : "builtin";
+    el("backend-script").value = backend.ahkScript || "";
+    el("backend-executable").value = backend.ahkExecutable || "";
     el("settings-revision").textContent = revision || "-";
   }
 
@@ -598,6 +602,12 @@
     if (!settings.input) settings.input = {};
     const input = settings.input;
     input.imeDisableBeforeSend = el("ime-disable").getAttribute("aria-checked") === "true";
+
+    if (!settings.backend) settings.backend = {};
+    const backend = settings.backend;
+    backend.mode = el("backend-mode").value === "ahk" ? "ahk" : "builtin";
+    backend.ahkScript = el("backend-script").value.trim();
+    backend.ahkExecutable = el("backend-executable").value.trim();
 
     if (!settings.gameProtection) settings.gameProtection = {};
     const protection = settings.gameProtection;
@@ -663,6 +673,16 @@
     el("connection-text").textContent = result.payload.engineInstalled === false ? "ホスト接続済み・フック未設置" : "Windowsホスト接続済み";
     el("status-foreground").textContent = "自動判定";
     el("status-profile").textContent = result.payload.activeProfile || "対象外";
+
+    const backendState = el("backend-state");
+    if (backendState) {
+      const ahk = result.payload.backend === "ahk";
+      backendState.className = "badge" + (running ? " badge-success" : "");
+      backendState.textContent = ahk
+        ? `AutoHotkey·${result.payload.backendStatus || "-"}`
+        : `内蔵エンジン·${result.payload.engineInstalled === false ? "未設置" : "動作中"}`;
+    }
+
     const fact = el("runtime-copy");
     if (result.payload.engineInstalled === false) fact.textContent = "入力フックを設置できていません。";
     renderOverviewActivityStatus();
@@ -737,10 +757,11 @@
       syncSettingsFromForms();
     });
   });
-  ["poll-interval", "resume-delay", "stop-triggers", "resume-processes"].forEach((id) => {
+  ["poll-interval", "resume-delay", "stop-triggers", "resume-processes", "backend-script", "backend-executable"].forEach((id) => {
     el(id).addEventListener("input", syncSettingsFromForms);
     el(id).addEventListener("change", syncSettingsFromForms);
   });
+  el("backend-mode").addEventListener("change", syncSettingsFromForms);
   el("profile-enabled").addEventListener("click", () => {
     const button = el("profile-enabled");
     setSwitch(button, button.getAttribute("aria-checked") !== "true");

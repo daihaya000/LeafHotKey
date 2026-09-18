@@ -620,6 +620,9 @@ textarea, input { font: inherit; color: inherit; }
 }
 .field-inline { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; color: var(--label-secondary); font-size: 12px; }
 .field-inline input { width: 132px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--separator); border-radius: 10px; background: var(--surface); color: var(--label); }
+.field-inline-wide { min-width: 320px; }
+.field-inline-wide input { width: 100%; font-size: 13px; }
+.field-inline select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--separator); border-radius: 10px; background: var(--surface); color: var(--label); font-size: 13px; }
 .settings-row-stacked { display: grid; align-items: start; }
 .settings-row-stacked textarea { width: 100%; }
 .actions {

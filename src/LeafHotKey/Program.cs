@@ -44,6 +44,8 @@ public static class Program
                 return ProfileSelfCheck.Run(
                     args.Length > 1 ? args[1] : null,
                     args.Length > 2 ? args[2] : null);
+            case "--check-backend":
+                return BackendSelfCheck.Run(args.Length > 1 ? args[1] : null);
             case "--status":
                 return SendToHost(ControlProtocol.Status);
             case "--pause":
@@ -87,6 +89,7 @@ public static class Program
             HotkeyProfile[] profiles;
             var settingsLoaded = true;
             var disableIme = true;
+            var backend = BackendSettings.Default;
             try
             {
                 if (store is null)
@@ -98,6 +101,7 @@ public static class Program
                     var snapshot = store.Load();
                     profiles = snapshot.Profiles.ToArray();
                     disableIme = snapshot.ImeDisableBeforeSend;
+                    backend = snapshot.Backend;
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException or FormatException)
@@ -107,12 +111,46 @@ public static class Program
             }
 
             using (var engine = new InputEngine(profiles, disableIme))
+            using (var ahk = new AhkBackend())
             {
-                var engineStarted = engine.Start();
+                // 保存された設定を、内蔵エンジンと AHK のどちらか一方だけに反映する。
+                void ApplySaved(SettingsSnapshot snapshot)
+                {
+                    engine.ApplyProfiles(snapshot.Profiles, snapshot.ImeDisableBeforeSend);
+                    ApplyBackend(snapshot.Backend);
+                }
+
+                void ApplyBackend(BackendSettings settings)
+                {
+                    var previous = backend;
+                    backend = settings;
+
+                    if (settings.Mode == InputBackend.Ahk)
+                    {
+                        // 切り替え時は必ず内蔵フックを外してから AHK を起動する。
+                        if (previous.Mode == InputBackend.Builtin) engine.Stop();
+                        engine.Enabled = false;
+                        ahk.Start(settings);
+                        return;
+                    }
+
+                    ahk.Stop();
+                    if (previous.Mode == InputBackend.Ahk)
+                    {
+                        engine.Start();
+                    }
+
+                    engine.Enabled = state.State == RuntimeState.Running;
+                }
+
+                // AHK に任せている間は内蔵フックを設置しない（同時稼働させない）。
+                var engineStarted = backend.Mode == InputBackend.Builtin && engine.Start();
+                if (backend.Mode == InputBackend.Ahk) ahk.Start(backend);
 
                 // フックを設置できなかった場合は動作中として扱わない。
-                if (!engineStarted || !settingsLoaded) state.Pause();
-                state.StateChanged += next => engine.Enabled = next == RuntimeState.Running;
+                if (!engineStarted && backend.Mode == InputBackend.Builtin) state.Pause();
+                if (!settingsLoaded) state.Pause();
+                state.StateChanged += next => engine.Enabled = next == RuntimeState.Running && backend.Mode == InputBackend.Builtin;
 
                 SettingsServer? web = null;
                 try
@@ -124,9 +162,9 @@ public static class Program
                         web = new SettingsServer(
                             store,
                             SettingsServer.DefaultPort,
-                            statusJson: () => StatusJson(state, engine),
+                            statusJson: () => StatusJson(state, engine, ahk),
                             webRoot: webRoot,
-                            onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles, snapshot.ImeDisableBeforeSend));
+                            onSaved: snapshot => ApplySaved(snapshot));
                         try
                         {
                             web.Start();
@@ -138,15 +176,15 @@ public static class Program
                             web = new SettingsServer(
                                 store,
                                 port: 0,
-                                statusJson: () => StatusJson(state, engine),
+                                statusJson: () => StatusJson(state, engine, ahk),
                                 webRoot: webRoot,
-                                onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles, snapshot.ImeDisableBeforeSend));
+                                onSaved: snapshot => ApplySaved(snapshot));
                             web.Start();
                         }
                     }
 
                     ApplicationConfiguration.Initialize();
-                    using var tray = new TrayApplication(state, server, web?.Url);
+                    using var tray = new TrayApplication(state, server, web?.Url, () => backend.Mode == InputBackend.Ahk ? "AutoHotkey（バックエンド）" : "内蔵エンジン");
                     Action requestRestart = () => restartRequested = true;
                     tray.RestartRequested += requestRestart;
                     Application.Run(tray);
@@ -187,12 +225,14 @@ public static class Program
     }
 
     /// <summary>WebUI へ返す現在の状態。</summary>
-    private static string StatusJson(HostState state, InputEngine engine)
+    private static string StatusJson(HostState state, InputEngine engine, AhkBackend ahk)
         => System.Text.Json.JsonSerializer.Serialize(new
         {
             state = state.State.ToString().ToLowerInvariant(),
             engineInstalled = engine.Installed,
             activeProfile = engine.ActiveProfileName,
+            backend = engine.Installed ? "builtin" : "ahk",
+            backendStatus = ahk.Status,
         });
 
     /// <summary>実行ディレクトリから上位へ defaults/settings.json を探す。</summary>

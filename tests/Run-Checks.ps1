@@ -102,6 +102,7 @@ Invoke-Build -Project $watcherProject
 $results = @()
 $results += Invoke-HostCheck -Mode '--check'
 $results += Invoke-HostCheck -Mode '--check-profiles' -WithSettings
+$results += Invoke-HostCheck -Mode '--check-backend'
 $results += Invoke-HostCheck -Mode '--check-send'
 $results += Invoke-HostCheck -Mode '--check-engine' -WithSettings
 $results += Invoke-HostCheck -Mode '--check-hook'

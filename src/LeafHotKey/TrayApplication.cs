@@ -14,15 +14,17 @@ public sealed class TrayApplication : ApplicationContext
     private readonly ToolStripMenuItem _toggleItem;
 
     private readonly string? _settingsUrl;
+    private readonly Func<string>? _backendLabel;
 
     /// <summary>すべてのリソースを解放した後に、本体を起動し直す要求。</summary>
     public event Action? RestartRequested;
 
-    public TrayApplication(HostState state, ControlServer server, string? settingsUrl = null)
+    public TrayApplication(HostState state, ControlServer server, string? settingsUrl = null, Func<string>? backendLabel = null)
     {
         _state = state;
         _server = server;
         _settingsUrl = settingsUrl;
+        _backendLabel = backendLabel;
 
         _toggleItem = new ToolStripMenuItem("一時停止", null, (_, _) => Toggle());
         var restartItem = new ToolStripMenuItem("再起動", null, (_, _) => RequestRestart());
@@ -145,11 +147,13 @@ public sealed class TrayApplication : ApplicationContext
     private void UpdateSurface(RuntimeState next)
     {
         _toggleItem.Text = next == RuntimeState.Paused ? "再開" : "一時停止";
+        var backend = _backendLabel?.Invoke();
+        var suffix = string.IsNullOrEmpty(backend) ? string.Empty : $" — {backend}";
         _icon.Text = next switch
         {
-            RuntimeState.Running => "LeafHotKey — 入力変換は有効",
-            RuntimeState.Paused => "LeafHotKey — 一時停止中",
-            _ => "LeafHotKey — 終了処理中",
+            RuntimeState.Running => $"LeafHotKey{suffix} — 入力変換は有効",
+            RuntimeState.Paused => $"LeafHotKey{suffix} — 一時停止中",
+            _ => $"LeafHotKey{suffix} — 終了処理中",
         };
     }
 

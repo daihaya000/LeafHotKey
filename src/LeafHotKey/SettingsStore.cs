@@ -18,6 +18,9 @@ public sealed class SettingsSnapshot
 
     /// <summary>送信前に IME をオフにするか（元 AHK の IME_SET(0)）。</summary>
     public bool ImeDisableBeforeSend { get; init; } = true;
+
+    /// <summary>入力変換を担当するバックエンド。</summary>
+    public required BackendSettings Backend { get; init; }
 }
 
 /// <summary>保存要求の結果。</summary>
@@ -191,13 +194,16 @@ public sealed class SettingsStore
             var gameProtection = GameProtectionSettings.Load(temp);
             var profiles = HotkeyProfileLoader.Load(temp);
 
+            using var document = JsonDocument.Parse(json);
+
             return new SettingsSnapshot
             {
                 Json = json,
                 Revision = RevisionOf(json),
                 GameProtection = gameProtection,
                 Profiles = profiles,
-                ImeDisableBeforeSend = ReadImeDisable(json),
+                ImeDisableBeforeSend = ReadImeDisable(document.RootElement),
+                Backend = BackendSettings.Read(document.RootElement),
             };
         }
         finally
@@ -207,10 +213,9 @@ public sealed class SettingsStore
     }
 
     /// <summary>input.imeDisableBeforeSend を読む。指定が無い場合は有効として扱う。</summary>
-    private static bool ReadImeDisable(string json)
+    private static bool ReadImeDisable(JsonElement root)
     {
-        using var document = JsonDocument.Parse(json);
-        if (!document.RootElement.TryGetProperty("input", out var input) || input.ValueKind != JsonValueKind.Object) return true;
+        if (!root.TryGetProperty("input", out var input) || input.ValueKind != JsonValueKind.Object) return true;
         if (!input.TryGetProperty("imeDisableBeforeSend", out var value)) return true;
 
         return value.ValueKind != JsonValueKind.False;

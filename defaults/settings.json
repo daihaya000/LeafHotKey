@@ -3,6 +3,11 @@
   "input": {
     "imeDisableBeforeSend": true
   },
+  "backend": {
+    "mode": "builtin",
+    "ahkScript": "C:/Users/Daichi/OneDrive/AutoHotKey/MySet.ahk",
+    "ahkExecutable": ""
+  },
   "gameProtection": {
     "enabled": true,
     "pollIntervalMs": 1000,

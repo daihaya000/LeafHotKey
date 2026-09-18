@@ -53,6 +53,10 @@ public static class SettingsSelfCheck
                 .Replace("\"imeDisableBeforeSend\": true", "\"imeDisableBeforeSend\": false", StringComparison.Ordinal);
             Check("update.prepared", updated != first.Json, "更新用の内容を用意できる");
             Check("input.ime.default", first.ImeDisableBeforeSend, "既定では送信前に IME を無効化する");
+            Check(
+                "backend.default",
+                first.Backend.Mode == InputBackend.Builtin && first.Backend.AhkScript.Length > 0,
+                $"既定のバックエンドは内蔵エンジン（AHKスクリプト: {first.Backend.AhkScript}）");
 
             var saved = store.Save(updated, first.Revision);
             Check("save.ok", saved.Success, $"正しい内容を保存できる（{saved.Message}）");
