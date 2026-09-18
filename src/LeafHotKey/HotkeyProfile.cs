@@ -43,6 +43,9 @@ public sealed class HotkeyRule
     /// <summary>Send の送信単位。Snd の第2引数は別要素として保持する。</summary>
     public IReadOnlyList<IReadOnlyList<SendToken>> Sequences { get; init; } = Array.Empty<IReadOnlyList<SendToken>>();
 
+    /// <summary>台帳に書かれていた送信文字列（AHK スクリプト生成でそのまま使う）。</summary>
+    public IReadOnlyList<string> SequenceTexts { get; init; } = Array.Empty<string>();
+
     /// <summary>Hold で押し続ける修飾キー。</summary>
     public string? HoldModifier { get; init; }
 
@@ -78,11 +81,21 @@ public static class HotkeyProfileLoader
     {
         using var stream = File.OpenRead(path);
         using var document = JsonDocument.Parse(stream);
+        return ReadProfiles(document.RootElement, path);
+    }
 
-        if (!document.RootElement.TryGetProperty("profiles", out var profiles) ||
-            profiles.ValueKind != JsonValueKind.Array)
+    /// <summary>設定 JSON の文字列から直接読む（AHK スクリプト生成などで使う）。</summary>
+    public static IReadOnlyList<HotkeyProfile> LoadJson(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return ReadProfiles(document.RootElement, "(inline)");
+    }
+
+    private static IReadOnlyList<HotkeyProfile> ReadProfiles(JsonElement root, string source)
+    {
+        if (!root.TryGetProperty("profiles", out var profiles) || profiles.ValueKind != JsonValueKind.Array)
         {
-            throw new InvalidDataException($"profiles セクションがありません: {path}");
+            throw new InvalidDataException($"profiles セクションがありません: {source}");
         }
 
         return profiles.EnumerateArray().Select(ReadProfile).ToList();
@@ -141,6 +154,7 @@ public static class HotkeyProfileLoader
             {
                 Trigger = parsedTrigger,
                 Kind = kind,
+                SequenceTexts = ReadStrings(action, "sequence"),
                 Sequences = SendSequenceParser.ParseAll(ReadStrings(action, "sequence")),
             },
             HotkeyActionKind.Hold => new HotkeyRule

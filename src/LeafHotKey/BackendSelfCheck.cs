@@ -104,8 +104,93 @@ public static class BackendSelfCheck
             Check("backend.release", !backend.IsRunning && backend.Status.Contains("ホスト終了", StringComparison.Ordinal), "ホスト終了時は手放して状態を残す");
         }
 
+        // 設定画面の内容から AHK スクリプトを生成する。
+        var sample = """"
+{
+  "profiles": [
+    { "id": "chrome", "name": "Chrome", "enabled": true, "processNames": ["chrome.exe"], "rules": [
+      { "trigger": { "key": "PgDn" }, "action": { "type": "send", "sequence": ["!{Left}"] } },
+      { "trigger": { "key": "e", "modifiers": ["Ctrl", "Shift"] }, "action": { "type": "send", "sequence": ["f5", "{Esc}"] } }
+    ] },
+    { "id": "clip", "name": "Clip", "enabled": true, "processNames": ["CLIPStudioPaint.exe"], "rules": [
+      { "trigger": { "key": "MButton", "anyModifier": true, "passThroughNative": true }, "action": { "type": "passthrough" } },
+      { "trigger": { "prefix": "MButton", "key": "f13" }, "action": { "type": "hold", "modifier": "Ctrl", "releaseOn": "f13", "blind": false } }
+    ] },
+    { "id": "unreal", "name": "UE", "enabled": true, "processNames": ["UE4Editor.exe", "UnrealEditor.exe"], "rules": [
+      { "trigger": { "key": "PgDn" }, "action": { "type": "send", "sequence": ["^z"] } }
+    ] }
+  ]
+}
+"""";
+
+        var generated = AhkScriptWriter.Build(sample);
+        Check("script.section", generated.Contains("#IfWinActive, ahk_exe chrome.exe", StringComparison.Ordinal), "プロファイルごとの対象を出す");
+        Check("script.send", generated.Contains("PgDn::Snd(\"!{Left}\")", StringComparison.Ordinal), "送信文字列を元の表記のまま出す");
+        Check(
+            "script.split",
+            generated.Contains("Snd(\"f5\")", StringComparison.Ordinal) && generated.Contains("Snd(\"{Esc}\")", StringComparison.Ordinal),
+            "Snd の第2引数は別の送信として出す");
+        Check("script.modifiers", generated.Contains("^+e::", StringComparison.Ordinal), "修飾キー付きの割り当てを出す");
+        Check("script.passthrough", generated.Contains("*~MButton::return", StringComparison.Ordinal), "元入力を通す前置キーを出す");
+        Check(
+            "script.hold",
+            generated.Contains("MButton & f13::Hold(\"Ctrl\", \"f13\", 0)", StringComparison.Ordinal),
+            "保持ルールを {Blind} なしで出す");
+        Check(
+            "script.group",
+            generated.Contains("GroupAdd, LeafHotKeyGroup_unreal, ahk_exe UE4Editor.exe", StringComparison.Ordinal) &&
+            generated.Contains("#IfWinActive, ahk_group LeafHotKeyGroup_unreal", StringComparison.Ordinal),
+            "対象が複数ならグループにする");
+        Check(
+            "script.helpers",
+            generated.Contains("IME_SET(SetSts, WinTitle=\"A\")", StringComparison.Ordinal) && generated.Contains("Hold(mod, trigger, blind=1)", StringComparison.Ordinal),
+            "元 AHK と同じ共通処理を埋め込む");
+        Check("script.path", AhkScriptWriter.PathFor("C:/x/MySet.ahk").EndsWith("MySet.generated.ahk", StringComparison.Ordinal), "生成先は元スクリプトと同じフォルダー");
+
+        try
+        {
+            var quoted = """"
+{ "profiles": [ { "id": "x", "name": "X", "enabled": true, "processNames": ["x.exe"], "rules": [
+  { "trigger": { "key": "q" }, "action": { "type": "send", "sequence": ["a\"b"] } } ] } ] }
+"""";
+            Check("script.escape", AhkScriptWriter.Build(quoted).Contains("`\"", StringComparison.Ordinal), "引用符をバッククォートで逃がす");
+
+            // 既定の全プロファイルを生成できる（構文上の穴を検出する）。
+            var defaults = FindDefaultSettings();
+            if (defaults is null)
+            {
+                Check("script.defaults", false, "defaults/settings.json が見つからない");
+            }
+            else
+            {
+                var full = AhkScriptWriter.Build(File.ReadAllText(defaults, encoding));
+                var sections = full.Split("#IfWinActive").Length - 1;
+                Check(
+                    "script.defaults",
+                    full.Contains("Snd(", StringComparison.Ordinal) && full.Contains("MButton & f13", StringComparison.Ordinal) && sections > 20,
+                    $"既定の台帳から生成できる（#IfWinActive {sections} 箇所）");
+            }
+        }
+        catch (Exception ex) when (ex is InvalidDataException or FormatException or System.Text.Json.JsonException)
+        {
+            Check("script.build", false, $"生成に失敗した（{ex.Message}）");
+        }
+
         File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);
         return failures == 0 ? 0 : 1;
+    }
+
+    private static string? FindDefaultSettings()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "defaults", "settings.json");
+            if (File.Exists(candidate)) return candidate;
+            directory = directory.Parent;
+        }
+
+        return null;
     }
 
     private static bool Throws(Action action)

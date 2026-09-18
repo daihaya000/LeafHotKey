@@ -90,6 +90,7 @@ public static class Program
             var settingsLoaded = true;
             var disableIme = true;
             var backend = BackendSettings.Default;
+            var settingsJson = string.Empty;
             try
             {
                 if (store is null)
@@ -102,6 +103,7 @@ public static class Program
                     profiles = snapshot.Profiles.ToArray();
                     disableIme = snapshot.ImeDisableBeforeSend;
                     backend = snapshot.Backend;
+                    settingsJson = snapshot.Json;
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException or FormatException)
@@ -113,10 +115,27 @@ public static class Program
             using (var engine = new InputEngine(profiles, disableIme))
             using (var ahk = new AhkBackend())
             {
+                // 設定画面の内容を AHK 用スクリプトへ書き出してから起動する。
+                void PrepareAhkScript(BackendSettings settings, string json)
+                {
+                    if (settings.Mode != InputBackend.Ahk || !settings.GenerateScript || json.Length == 0) return;
+
+                    try
+                    {
+                        AhkScriptWriter.Write(json, AhkScriptWriter.PathFor(settings.AhkScript));
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // 書き出せない場合は設定済みのスクリプトをそのまま使う。
+                    }
+                }
+
                 // 保存された設定を、内蔵エンジンと AHK のどちらか一方だけに反映する。
                 void ApplySaved(SettingsSnapshot snapshot)
                 {
                     engine.ApplyProfiles(snapshot.Profiles, snapshot.ImeDisableBeforeSend);
+                    settingsJson = snapshot.Json;
+                    PrepareAhkScript(snapshot.Backend, snapshot.Json);
                     ApplyBackend(snapshot.Backend);
                 }
 
@@ -145,7 +164,11 @@ public static class Program
 
                 // AHK に任せている間は内蔵フックを設置しない（同時稼働させない）。
                 var engineStarted = backend.Mode == InputBackend.Builtin && engine.Start();
-                if (backend.Mode == InputBackend.Ahk) ahk.Start(backend);
+                if (backend.Mode == InputBackend.Ahk)
+                {
+                    PrepareAhkScript(backend, settingsJson);
+                    ahk.Start(backend);
+                }
 
                 // フックを設置できなかった場合は動作中として扱わない。
                 if (!engineStarted && backend.Mode == InputBackend.Builtin) state.Pause();
@@ -259,6 +282,7 @@ public static class Program
             backendStatus = ahk.Status,
             backendNote = ahk.LastNotice ?? string.Empty,
             backendScript = ahk.ScriptPath,
+            backendGenerated = backend.GenerateScript ? AhkScriptWriter.PathFor(backend.AhkScript) : string.Empty,
             backendPid = ahk.ProcessId,
             backendRestarts = ahk.Restarts,
         });

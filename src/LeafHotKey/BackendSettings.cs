@@ -23,6 +23,12 @@ public sealed class BackendSettings
     /// <summary>AutoHotkey 本体。空ならスクリプトと同じフォルダーなどから自動検出する。</summary>
     public required string AhkExecutable { get; init; }
 
+    /// <summary>設定画面の内容から AHK スクリプトを生成して使うか。</summary>
+    public bool GenerateScript { get; init; } = true;
+
+    /// <summary>実際に起動するスクリプト（生成を使う場合は生成物）。</summary>
+    public string ScriptToRun => GenerateScript ? AhkScriptWriter.PathFor(AhkScript) : AhkScript;
+
     public static BackendSettings Default { get; } = new()
     {
         Mode = InputBackend.Builtin,
@@ -60,6 +66,7 @@ public sealed class BackendSettings
             Mode = mode,
             AhkScript = ReadString(backend, "ahkScript"),
             AhkExecutable = ReadString(backend, "ahkExecutable"),
+            GenerateScript = !backend.TryGetProperty("generateScript", out var generate) || generate.ValueKind != JsonValueKind.False,
         };
 
         settings.Validate();

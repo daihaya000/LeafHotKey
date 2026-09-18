@@ -57,7 +57,7 @@ public sealed class AhkBackend : IDisposable
     /// <summary>スクリプトを起動する。既に同じスクリプトが動いていれば何もしない。</summary>
     public bool Start(BackendSettings settings)
     {
-        var script = ResolveScript(settings.AhkScript);
+        var script = ResolveScript(settings.ScriptToRun);
         if (script is null)
         {
             Status = "スクリプトが見つかりません";

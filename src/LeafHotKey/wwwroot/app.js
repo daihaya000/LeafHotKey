@@ -582,6 +582,7 @@
     el("backend-mode").value = backend.mode === "ahk" ? "ahk" : "builtin";
     el("backend-script").value = backend.ahkScript || "";
     el("backend-executable").value = backend.ahkExecutable || "";
+    setSwitch(el("backend-generate"), backend.generateScript !== false);
     el("settings-revision").textContent = revision || "-";
   }
 
@@ -608,6 +609,7 @@
     backend.mode = el("backend-mode").value === "ahk" ? "ahk" : "builtin";
     backend.ahkScript = el("backend-script").value.trim();
     backend.ahkExecutable = el("backend-executable").value.trim();
+    backend.generateScript = el("backend-generate").getAttribute("aria-checked") === "true";
 
     if (!settings.gameProtection) settings.gameProtection = {};
     const protection = settings.gameProtection;
@@ -695,6 +697,9 @@
         : "内蔵フックを設置しています。";
     }
 
+    const generated = el("backend-generated");
+    if (generated) generated.textContent = result.payload.backendGenerated || "（書き出しなし）";
+
     const fact = el("runtime-copy");
     if (result.payload.engineInstalled === false) fact.textContent = "入力フックを設置できていません。";
     renderOverviewActivityStatus();
@@ -762,7 +767,7 @@
     updateThemeIcon();
   }));
 
-  ["protection-enabled", "ime-disable"].forEach((id) => {
+  ["protection-enabled", "ime-disable", "backend-generate"].forEach((id) => {
     el(id).addEventListener("click", () => {
       const button = el(id);
       setSwitch(button, button.getAttribute("aria-checked") !== "true");
