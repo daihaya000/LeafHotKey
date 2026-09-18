@@ -216,14 +216,7 @@
       modifier.input.dataset.ruleModifier = "";
       const release = makeInput("解除するキー", "", rule.dataset.releaseOn || "");
       release.input.dataset.ruleReleaseOn = "";
-      const blind = document.createElement("label");
-      blind.className = "check-field";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = rule.dataset.blind !== "false";
-      checkbox.dataset.ruleBlind = "";
-      blind.append(checkbox, document.createTextNode("他の修飾キーを維持する"));
-      fields.append(modifier.field, release.field, blind);
+      fields.append(modifier.field, release.field);
     }
   }
 
@@ -235,7 +228,6 @@
     rule.dataset.sequence = (action.sequence || []).join("\n");
     rule.dataset.modifier = action.modifier || "";
     rule.dataset.releaseOn = action.releaseOn || "";
-    rule.dataset.blind = action.blind === false ? "false" : "true";
 
     const header = document.createElement("div");
     header.className = "rule-header";
@@ -330,7 +322,6 @@
       if (type === "hold") {
         action.modifier = get("ruleModifier").value.trim();
         action.releaseOn = get("ruleReleaseOn").value.trim();
-        action.blind = get("ruleBlind").checked;
         if (!action.modifier || !action.releaseOn) throw new Error(`${key} の維持するキーと解除するキーを入力してください。`);
       }
       return { trigger, action };
@@ -482,8 +473,6 @@
     if (!settings) return;
     const input = settings.input || {};
     setSwitch(el("ime-disable"), input.imeDisableBeforeSend !== false);
-    el("send-delay").value = input.sendDelayMs ?? 2;
-    setSwitch(el("default-blind"), input.defaultBlind !== false);
     el("settings-revision").textContent = revision || "-";
   }
 
@@ -504,8 +493,6 @@
     if (!settings.input) settings.input = {};
     const input = settings.input;
     input.imeDisableBeforeSend = el("ime-disable").getAttribute("aria-checked") === "true";
-    input.sendDelayMs = Number(el("send-delay").value);
-    input.defaultBlind = el("default-blind").getAttribute("aria-checked") === "true";
 
     if (!settings.gameProtection) settings.gameProtection = {};
     const protection = settings.gameProtection;
@@ -638,14 +625,14 @@
     updateThemeIcon();
   }));
 
-  ["protection-enabled", "ime-disable", "default-blind"].forEach((id) => {
+  ["protection-enabled", "ime-disable"].forEach((id) => {
     el(id).addEventListener("click", () => {
       const button = el(id);
       setSwitch(button, button.getAttribute("aria-checked") !== "true");
       syncSettingsFromForms();
     });
   });
-  ["poll-interval", "resume-delay", "stop-triggers", "resume-processes", "send-delay"].forEach((id) => {
+  ["poll-interval", "resume-delay", "stop-triggers", "resume-processes"].forEach((id) => {
     el(id).addEventListener("input", syncSettingsFromForms);
     el(id).addEventListener("change", syncSettingsFromForms);
   });

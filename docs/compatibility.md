@@ -9,12 +9,13 @@
 
 | AHK | 定義箇所 | 移植先 | 意味 |
 | --- | --- | --- | --- |
-| `IME_SET(0)` | `MySet.ahk:18-33` | `input.imeDisableBeforeSend` | 送信前にIMEをオフにする |
-| `Sleep,2` | `MySet.ahk:40,52` | `input.sendDelayMs` | IME操作後の待機（2ms） |
+| `IME_SET(0)` | `MySet.ahk:18-33` | `input.imeDisableBeforeSend` | 送信前にIMEをオフにする（設定で解除できる） |
+| `Sleep,2` | `MySet.ahk:40,52` | なし | `SendMessageTimeout`で同期的にIMEを切るため待機不要。設定項目は持たない |
 | `Snd(keys, then)` | `MySet.ahk:38-44` | `action.type = "send"` | `sequence` の各要素を別々の送信として扱う |
 | `Hold(mod, trigger, blind)` | `MySet.ahk:49-56` | `action.type = "hold"` | `modifier` を押し、`releaseOn` を離すまで保持 |
-| `{Blind}` | `MySet.ahk:50` | `action.blind` | 省略時 `true`、`Hold(...,0)` は `false` |
+| `{Blind}` | `MySet.ahk:50` | なし | 本実装は常に他の修飾キーを維持する（`blind: true` 相当）。`action.blind` は互換のため読むだけで動作は変えない |
 | `*~key::return` | 各プロファイル | `action.type = "passthrough"` | 前置キーに使いつつ、元の入力を通す |
+| `~` 付き前置キーの単体動作 | 各プロファイル | 前置キーの `passThroughNative` | AHK 1.1.14+ と同様、離上ではなく**押下時**に発火する |
 | `GroupAdd, UEGroup` | `MySet.ahk:58-59` | `unreal.processNames` | UE4Editor.exe と UnrealEditor.exe |
 
 ### 送信表記の扱い
@@ -81,9 +82,9 @@
 3. `MySet.ahk:165` の Photoshop `^+e::Snd("f5", "{Esc}")` は `{F5}` ではなく文字 `f5` を送る表記。意図か誤記か要確認。
 4. `MySet.ahk:352` UE の `f22` と `f24` が両方 `^+i` で重複している。
 5. `MySet.ahk:419-420` MoI の `MButton & f23` と `f24` が両方 `!o` で重複している。
-6. Clip Studio と Photoshop は `MButton::{Enter}`（単体）と `*~MButton`（通過）を併記している。実装では AHK の前置キー仕様に合わせ、「押下時は送信せず、組み合わせが使われなかった場合にだけ解放時へ単体動作を発火」「`*~` があるため元の中ボタン入力は常に通す」として解釈している。元 AHK の実挙動との一致は実機確認が必要。
+6. Clip Studio と Photoshop は `MButton::{Enter}`（単体）と `*~MButton`（通過）を併記している。AHK 1.1.14+ では `~` 付き前置キーの単体ホットキーは**押下時**に発火するため、実装も押下時に `{Enter}` を送り、組み合わせ（GShift+ホイール等）はその後に発火する。実機E2E（2026-09-18）で `MButton down → Enter → Wheel → ]` の順を確認済み。
 7. UE / Phoenix の Swap で使う `{AltDown}` `{ShiftUp}` は、AHK 標準の `{Alt down}`（空白あり）と異なる表記。実装側は両方を「修飾キーの押下／解放」として解釈しているが、元 AHK で実際に修飾キーとして動作していたかは実機確認が必要。
-8. Clip Studio の `f16` は `Hold("Space", "f16")` と `f16 & Home` の前置キーを兼ねる。前置キーの単体動作は解放時に発火するため、その時点で `KeyWait` は即座に戻る。実装では Space を押しっぱなしにせず「押してすぐ離す」振る舞いとしている（保持キーが残る事故を避ける）。元 AHK での体感との差は実機確認が必要。
+8. Clip Studio の `f16` は `Hold("Space", "f16")` と `f16 & Home` の前置キーを兼ねる。AHK 1.1.14+ の `~` 付き前置キーと同じく、**押下時**に Space を保持し、離上で解放する（実機E2Eと `--check-engine` の `prefix.f16.*` で確認）。
 
 ## 6. 検証方法と現在の状態
 
@@ -94,11 +95,23 @@
 | `LeafHotKey.exe --check <report>` | 制御チャネル、多重起動防止、終了理由の区別 | 18 PASS |
 | `--check-profiles <report> [settings]` | 台帳の読込みと送信文字列の解析 | 25 PASS（251ルール） |
 | `--check-send <report>` | SendInput の実送信と配列解決 | 13 PASS |
-| `--check-engine <report> [settings]` | 判定、前置キー、保持キーの解放 | 29 PASS |
+| `--check-engine <report> [settings]` | 判定、前置キー、保持キーの解放、IME 設定 | 35 PASS |
 | `--check-hook <report>` | 実フック経由の変換・抑止・停止時解放 | 12 PASS |
 | `--check-coverage <report> [settings]` | 全 send / hold ルールを発火させて台帳と照合 | 243 件、不一致 0 |
+| `--check-settings <report> [settings]` | 保存、競合・不正拒否、破損からの復旧 | 30 PASS |
+| `--check-server <report> [settings]` | HTTP 配信、Host/Origin 検証、保存反映、アイコン配信 | 30 PASS |
 | `LeafHotKeyWatcher.exe --check` | Watcher の多重起動防止と本体未到達時の扱い | 4 PASS |
-| `--check-lifecycle [settings]` | 退避・待機・再出現・復帰・失敗時の停止 | 20 PASS |
+| `--check-lifecycle [settings]` | 退避・待機・再出現・復帰・失敗時の停止・本体パス解決 | 23 PASS |
+
+## 7. 意図的な差分（AHK と異なる点）
+
+| 項目 | AHK | 本実装 | 理由 |
+| --- | --- | --- | --- |
+| `{Blind}` | `Hold(mod, key, 0)` で他の修飾キーを一時的に離す | 常に他の修飾キーを維持する | ユーザーの押下状態を触らないほうが事故が少ない（差は GShift と修飾キーの同時押しのみ） |
+| 保持キーの解放 | `KeyWait` は対象キーの解放まで待つ | 前面アプリが変わった時点でも解放する | 保持したまま別アプリへ移ると修飾キーが残るため |
+| `Sleep,2` | IME 操作後に 2ms 待つ | 待機しない | `SendMessageTimeout` で同期的に IME を切るため不要 |
+| 送信の待機時間設定 | なし | なし（`input.sendDelayMs` は廃止） | フック内で待機すると入力処理を遅らせるため |
+| 設定画面の URL | なし | `http://127.0.0.1:17832/` 固定（トークンなし） | ブックマーク・再読み込みを可能にする。防御はループバック限定＋Host/Origin 検証 |
 
 ### 6.2 自動検証で確かめられていること
 

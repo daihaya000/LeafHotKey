@@ -13,7 +13,7 @@ public sealed class InputEngine : IDisposable
     private readonly InputEngineCore _core;
     private readonly ForegroundApp _foreground = new();
     private readonly ManualResetEventSlim _ready = new(false);
-    private readonly bool _disableIme;
+    private volatile bool _disableIme;
 
     private NativeMethods.HookProc? _keyboardCallback;
     private NativeMethods.HookProc? _mouseCallback;
@@ -28,7 +28,7 @@ public sealed class InputEngine : IDisposable
         _profiles = profiles;
         _sender = sender ?? new KeySender();
         _disableIme = disableIme;
-        _core = new InputEngineCore(new ImeAwareSink(_sender, _foreground, disableIme));
+        _core = new InputEngineCore(new ImeAwareSink(_sender, _foreground, () => _disableIme));
     }
 
     /// <summary>送信前に前面ウィンドウの IME をオフにする送信先（元 AHK の Snd 相当）。</summary>
@@ -36,9 +36,9 @@ public sealed class InputEngine : IDisposable
     {
         private readonly KeySender _sender;
         private readonly ForegroundApp _foreground;
-        private readonly bool _disableIme;
+        private readonly Func<bool> _disableIme;
 
-        public ImeAwareSink(KeySender sender, ForegroundApp foreground, bool disableIme)
+        public ImeAwareSink(KeySender sender, ForegroundApp foreground, Func<bool> disableIme)
         {
             _sender = sender;
             _foreground = foreground;
@@ -48,7 +48,7 @@ public sealed class InputEngine : IDisposable
         public SendResult Send(IReadOnlyList<SendToken> tokens)
         {
             // IME 操作に失敗しても送信自体は続ける（AHK も戻り値を見ていない）。
-            if (_disableIme) ImeController.Disable(_foreground.CurrentWindow());
+            if (_disableIme()) ImeController.Disable(_foreground.CurrentWindow());
             return _sender.Send(tokens);
         }
     }
@@ -71,10 +71,11 @@ public sealed class InputEngine : IDisposable
     /// 設定保存後に新しいプロファイルへ差し替える。
     /// 入れ替え前に保持中のキーを解放し、古い割り当てのまま押しっぱなしにならないようにする。
     /// </summary>
-    public void ApplyProfiles(IReadOnlyList<HotkeyProfile> profiles)
+    public void ApplyProfiles(IReadOnlyList<HotkeyProfile> profiles, bool disableIme)
     {
         _core.SetActiveProfile(null);
         _profiles = profiles;
+        _disableIme = disableIme;
     }
 
     public string ActiveProfileName => _core.ActiveProfile?.Name ?? string.Empty;

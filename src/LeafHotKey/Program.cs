@@ -86,9 +86,19 @@ public static class Program
             // 設定を読めない場合でもトレイは起動させる（無言で終了しない）。
             HotkeyProfile[] profiles;
             var settingsLoaded = true;
+            var disableIme = true;
             try
             {
-                profiles = store is null ? Array.Empty<HotkeyProfile>() : store.Load().Profiles.ToArray();
+                if (store is null)
+                {
+                    profiles = Array.Empty<HotkeyProfile>();
+                }
+                else
+                {
+                    var snapshot = store.Load();
+                    profiles = snapshot.Profiles.ToArray();
+                    disableIme = snapshot.ImeDisableBeforeSend;
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException or FormatException)
             {
@@ -96,7 +106,7 @@ public static class Program
                 settingsLoaded = false;
             }
 
-            using (var engine = new InputEngine(profiles))
+            using (var engine = new InputEngine(profiles, disableIme))
             {
                 var engineStarted = engine.Start();
 
@@ -116,7 +126,7 @@ public static class Program
                             SettingsServer.DefaultPort,
                             statusJson: () => StatusJson(state, engine),
                             webRoot: webRoot,
-                            onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles));
+                            onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles, snapshot.ImeDisableBeforeSend));
                         try
                         {
                             web.Start();
@@ -130,7 +140,7 @@ public static class Program
                                 port: 0,
                                 statusJson: () => StatusJson(state, engine),
                                 webRoot: webRoot,
-                                onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles));
+                                onSaved: snapshot => engine.ApplyProfiles(snapshot.Profiles, snapshot.ImeDisableBeforeSend));
                             web.Start();
                         }
                     }

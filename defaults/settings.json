@@ -1,9 +1,7 @@
 {
   "schemaVersion": 1,
   "input": {
-    "imeDisableBeforeSend": true,
-    "sendDelayMs": 2,
-    "defaultBlind": true
+    "imeDisableBeforeSend": true
   },
   "gameProtection": {
     "enabled": true,

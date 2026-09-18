@@ -48,14 +48,18 @@ public static class SettingsSelfCheck
             Check("revision.stable", first.Revision == again.Revision, "内容が変わらなければ版も変わらない");
 
             // 正常な更新。
-            var updated = first.Json.Replace("\"pollIntervalMs\": 1000", "\"pollIntervalMs\": 750", StringComparison.Ordinal);
+            var updated = first.Json
+                .Replace("\"pollIntervalMs\": 1000", "\"pollIntervalMs\": 750", StringComparison.Ordinal)
+                .Replace("\"imeDisableBeforeSend\": true", "\"imeDisableBeforeSend\": false", StringComparison.Ordinal);
             Check("update.prepared", updated != first.Json, "更新用の内容を用意できる");
+            Check("input.ime.default", first.ImeDisableBeforeSend, "既定では送信前に IME を無効化する");
 
             var saved = store.Save(updated, first.Revision);
             Check("save.ok", saved.Success, $"正しい内容を保存できる（{saved.Message}）");
 
             var afterSave = store.Load();
             Check("save.applied", afterSave.GameProtection.PollIntervalMs == 750, $"保存内容が反映される（pollIntervalMs={afterSave.GameProtection.PollIntervalMs}）");
+            Check("input.ime.saved", !afterSave.ImeDisableBeforeSend, "保存した IME 設定を読み直せる");
             Check("save.revision", afterSave.Revision != first.Revision && afterSave.Revision == saved.Revision, "保存で版が更新される");
             Check("save.backup", File.Exists(store.BackupPath), "直前の内容がバックアップに残る");
             Check("save.no-temp", !File.Exists(settingsPath + ".tmp"), "一時ファイルが残らない");

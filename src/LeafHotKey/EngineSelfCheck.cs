@@ -188,6 +188,14 @@ public static class EngineSelfCheck
         sink.Sent.Clear();
         Check("unmapped", engine.OnKeyDown("q", SendModifiers.None) == InputDecision.PassThrough && sink.Sent.Count == 0, "未割り当てのキーは通過させる");
 
+        // IME 無効化は設定で切り替えられ、保存時に反映される。
+        using (var live = new InputEngine(Array.Empty<HotkeyProfile>(), disableIme: false))
+        {
+            Check("ime.off", !live.ImeDisableEnabled, "設定で IME 無効化を止められる");
+            live.ApplyProfiles(Array.Empty<HotkeyProfile>(), disableIme: true);
+            Check("ime.applied", live.ImeDisableEnabled, "保存時に IME 設定が反映される");
+        }
+
         File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);
         return failures == 0 ? 0 : 1;
     }

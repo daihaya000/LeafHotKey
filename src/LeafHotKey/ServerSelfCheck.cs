@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace LeafHotKey;
 
@@ -132,6 +133,23 @@ public static class ServerSelfCheck
                     "webui.js",
                     script.Status == 200 && !script.Body.Contains("X-LeafHotKey-Token", StringComparison.Ordinal),
                     "app.js を配信し、トークンヘッダを使わない");
+
+                // app.js が参照する id が index.html に無いと、画面が無言で壊れる。
+                var referenced = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var line in script.Body.Split('\n'))
+                {
+                    foreach (Match match in Regex.Matches(line, "el\\(\"([^\"]+)\"\\)")) referenced.Add(match.Groups[1].Value);
+                    if (line.Contains(".forEach((id) =>", StringComparison.Ordinal))
+                    {
+                        foreach (Match match in Regex.Matches(line, "\"([a-z0-9\\-]+)\"")) referenced.Add(match.Groups[1].Value);
+                    }
+                }
+
+                var missingIds = referenced.Where(id => !index.Body.Contains($"id=\"{id}\"", StringComparison.Ordinal)).ToArray();
+                Check(
+                    "webui.ids",
+                    missingIds.Length == 0,
+                    $"app.js が参照する要素は index.html に存在する（不足: {(missingIds.Length == 0 ? "なし" : string.Join(", ", missingIds))}）");
 
                 Check("webui.reload",
                     Send(uiServer.Port, "GET", "/", uiHost, origin: null).Status == 200 &&

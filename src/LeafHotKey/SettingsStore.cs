@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace LeafHotKey;
 
@@ -14,6 +15,9 @@ public sealed class SettingsSnapshot
     public required GameProtectionSettings GameProtection { get; init; }
 
     public required IReadOnlyList<HotkeyProfile> Profiles { get; init; }
+
+    /// <summary>送信前に IME をオフにするか（元 AHK の IME_SET(0)）。</summary>
+    public bool ImeDisableBeforeSend { get; init; } = true;
 }
 
 /// <summary>保存要求の結果。</summary>
@@ -193,12 +197,23 @@ public sealed class SettingsStore
                 Revision = RevisionOf(json),
                 GameProtection = gameProtection,
                 Profiles = profiles,
+                ImeDisableBeforeSend = ReadImeDisable(json),
             };
         }
         finally
         {
             File.Delete(temp);
         }
+    }
+
+    /// <summary>input.imeDisableBeforeSend を読む。指定が無い場合は有効として扱う。</summary>
+    private static bool ReadImeDisable(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("input", out var input) || input.ValueKind != JsonValueKind.Object) return true;
+        if (!input.TryGetProperty("imeDisableBeforeSend", out var value)) return true;
+
+        return value.ValueKind != JsonValueKind.False;
     }
 
     /// <summary>一時ファイルへ書いてから置き換える。途中で壊れた内容を残さない。</summary>
