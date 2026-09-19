@@ -481,7 +481,7 @@
       .rule-table-head,
       .rule-row {
         display: grid;
-        grid-template-columns: 104px 96px 108px 128px minmax(180px, 1fr) 132px 32px;
+        grid-template-columns: 104px 108px 96px 128px minmax(180px, 1fr) 132px 32px;
         gap: 8px;
         align-items: center;
         min-width: 820px;

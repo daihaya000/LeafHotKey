@@ -448,7 +448,7 @@
     });
 
     renderRuleDetail(detail, action.type || "send", action);
-    row.append(prefix, key, modifiers, actionType, detail, flags, remove);
+    row.append(prefix, modifiers, key, actionType, detail, flags, remove);
     return row;
   }
 
