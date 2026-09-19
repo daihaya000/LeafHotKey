@@ -481,10 +481,10 @@
       .rule-table-head,
       .rule-row {
         display: grid;
-        grid-template-columns: 104px 108px 96px 128px minmax(180px, 1fr) 132px 32px;
+        grid-template-columns: 116px 120px 116px 128px minmax(180px, 1fr) 132px 32px;
         gap: 8px;
         align-items: center;
-        min-width: 820px;
+        min-width: 880px;
         padding: 6px 12px;
       }
       .rule-table-head {
@@ -530,7 +530,7 @@
         justify-content: center;
         gap: 3px;
         min-height: 30px;
-        padding: 4px 8px;
+        padding: 4px 32px 4px 8px;
         border: 1px solid transparent;
         border-radius: 8px;
         background: var(--surface-secondary);
@@ -539,6 +539,31 @@
       .rule-keys:not(.is-editing) .keys-view:hover { border-color: var(--separator); }
       .rule-keys.is-editing .keys-view { display: none; }
       .rule-keys:not(.is-editing) textarea { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; opacity: 0; }
+      .rule-keys textarea { padding-right: 32px; }
+      /* 直接入力（実際にキーを押して指定する）のボタン。欄の右端に重ねる。 */
+      .rule-field { display: flex; position: relative; min-width: 0; }
+      .rule-field input { padding-right: 30px; }
+      .rule-capture {
+        display: inline-flex;
+        position: absolute;
+        top: 50%;
+        right: 3px;
+        width: 22px;
+        height: 22px;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        transform: translateY(-50%);
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--label-tertiary);
+        cursor: pointer;
+      }
+      .rule-capture svg { width: 14px; height: 14px; }
+      .rule-capture:hover { background: var(--fill); color: var(--label-secondary); }
+      .rule-capture[aria-pressed="true"] { background: var(--accent); color: #fff; }
+      .rule-field.is-capturing input, .rule-keys.is-capturing .keys-view { border-color: var(--accent); background: var(--surface); }
       .keys-line { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-height: 20px; }
       .keys-line.is-empty { color: var(--label-tertiary); font-size: 12px; }
       .keys-step { width: 6px; }

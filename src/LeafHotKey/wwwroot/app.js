@@ -266,6 +266,167 @@
     return input;
   }
 
+  // 直接入力（実際にキーを押して指定する）。テキスト入力はそのまま残し、欄の右のボタンで切り替える。
+  const MODIFIER_KEYS = new Map([
+    ["ControlLeft", "Ctrl"], ["ControlRight", "Ctrl"],
+    ["ShiftLeft", "Shift"], ["ShiftRight", "Shift"],
+    ["AltLeft", "Alt"], ["AltRight", "Alt"],
+    ["MetaLeft", "LWin"], ["MetaRight", "RWin"],
+  ]);
+
+  const NAMED_KEYS = new Map([
+    ["Escape", "Esc"], ["Enter", "Enter"], ["NumpadEnter", "Enter"], ["Tab", "Tab"], ["Space", "Space"],
+    ["Backspace", "Backspace"], ["Delete", "Delete"], ["Insert", "Insert"], ["Home", "Home"], ["End", "End"],
+    ["PageUp", "PgUp"], ["PageDown", "PgDn"], ["ArrowUp", "Up"], ["ArrowDown", "Down"],
+    ["ArrowLeft", "Left"], ["ArrowRight", "Right"], ["Pause", "Pause"], ["PrintScreen", "PrintScreen"],
+    ["ContextMenu", "AppsKey"],
+  ]);
+
+  let capturing = null;
+
+  // code から正規のキー名を作る。文字キー・数字は Shift の影響を受けない。
+  function keyNameOf(event) {
+    const code = event.code || "";
+    if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+    if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+    if (/^Numpad[0-9]$/.test(code)) return code.slice(6);
+    if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+    if (MODIFIER_KEYS.has(code)) return MODIFIER_KEYS.get(code);
+    if (NAMED_KEYS.has(code)) return NAMED_KEYS.get(code);
+    // 記号はレイアウトの文字を使う（JIS の : など）。
+    return event.key && event.key.length === 1 ? event.key : null;
+  }
+
+  function heldModifiers(event) {
+    const held = [];
+    if (event.ctrlKey) held.push("Ctrl");
+    if (event.shiftKey) held.push("Shift");
+    if (event.altKey) held.push("Alt");
+    if (event.metaKey) held.push("Win");
+    return held;
+  }
+
+  const MODIFIER_ORDER = ["Ctrl", "Shift", "Alt", "Win"];
+
+  // 左右や LWin/RWin の違いを、修飾欄で使う 4 種にまとめる。
+  function modifierGroupOf(code) {
+    if (code.startsWith("Control")) return "Ctrl";
+    if (code.startsWith("Shift")) return "Shift";
+    if (code.startsWith("Alt")) return "Alt";
+    if (code.startsWith("Meta")) return "Win";
+    return null;
+  }
+
+  // 入力欄を、押したキーで埋めるボタン付きにする。
+  function withKeyCapture(input, kind) {
+    const wrap = document.createElement("div");
+    wrap.className = "rule-field";
+    wrap.append(input, captureButton({ input, kind, wrap }));
+    return wrap;
+  }
+
+  function captureButton(field) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "rule-capture";
+    button.setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-label", "押したキーで入力");
+    button.title = "押したキーで入力";
+    button.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></svg>';
+    button.addEventListener("click", () => {
+      if (capturing && capturing.button === button) disarmCapture();
+      else armCapture({ ...field, button });
+    });
+    return button;
+  }
+
+  function armCapture(field) {
+    disarmCapture();
+    capturing = field;
+    capturing.modifiers = new Set();
+    field.button.setAttribute("aria-pressed", "true");
+    field.wrap.classList.add("is-capturing");
+    window.addEventListener("keydown", onCaptureKeyDown, true);
+    window.addEventListener("keyup", onCaptureKeyUp, true);
+    window.addEventListener("mousedown", onCaptureMouseDown, true);
+    window.addEventListener("wheel", onCaptureWheel, { capture: true, passive: false });
+  }
+
+  function disarmCapture() {
+    if (!capturing) return;
+    const field = capturing;
+    capturing = null;
+    field.button.setAttribute("aria-pressed", "false");
+    field.wrap.classList.remove("is-capturing");
+    window.removeEventListener("keydown", onCaptureKeyDown, true);
+    window.removeEventListener("keyup", onCaptureKeyUp, true);
+    window.removeEventListener("mousedown", onCaptureMouseDown, true);
+    window.removeEventListener("wheel", onCaptureWheel, true);
+  }
+
+  // 録音中はブラウザのショートカットや入力欄への反映を止める（値は keyup で拾う）。
+  function onCaptureKeyDown(event) {
+    const group = modifierGroupOf(event.code || "");
+    if (group && capturing) capturing.modifiers.add(group);
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function onCaptureKeyUp(event) {
+    if (!capturing) return;
+    const key = keyNameOf(event);
+    const isModifier = MODIFIER_KEYS.has(event.code || "");
+    const held = heldModifiers(event);
+    let value = "";
+
+    if (capturing.kind === "sequence") {
+      // 送信内容は SendNotation の表記で書く。
+      if (isModifier || !key) return;
+      value = held.length ? `${held.join("+")}+${key}` : key;
+    } else if (capturing.kind === "modifiers") {
+      if (isModifier) {
+        // 修飾キーの組み合わせは、押したものを全部離してから確定する。
+        if (held.length) return;
+        value = MODIFIER_ORDER.filter((name) => capturing.modifiers.has(name)).join(" + ");
+      } else if (held.length) {
+        value = held.join(" + ");
+      }
+    } else if (key) {
+      value = key;
+    }
+
+    if (!value) return;
+    event.preventDefault();
+    event.stopPropagation();
+    writeCaptured(value);
+  }
+
+  function onCaptureMouseDown(event) {
+    if (!capturing || capturing.kind === "modifiers" || event.button !== 1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    writeCaptured("MButton");
+  }
+
+  function onCaptureWheel(event) {
+    if (!capturing || capturing.kind === "modifiers") return;
+    event.preventDefault();
+    event.stopPropagation();
+    writeCaptured(event.deltaY < 0 ? "WheelUp" : "WheelDown");
+  }
+
+  function writeCaptured(value) {
+    const input = capturing.input;
+    if (capturing.kind === "sequence") {
+      const current = input.value.trim();
+      input.value = current ? `${current}\n${value}` : value;
+    } else {
+      input.value = value;
+    }
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    disarmCapture();
+  }
+
   // 送信内容をキーキャップ表示にする。表記は SendNotation と同じで、+ は修飾キー、
   // 空白区切りは順に送る操作、↓ / ↑ は押しっぱなしと離す操作を表す。
   function renderKeycaps(view, text) {
@@ -339,7 +500,7 @@
     if (type === "hold") {
       const modifier = makeRuleInput("ruleModifier", "維持するキー", action.modifier, "維持するキー（例: Ctrl）");
       const release = makeRuleInput("ruleReleaseOn", "解除するキー", action.releaseOn, "解除するキー（例: f13）");
-      detail.append(modifier, release);
+      detail.append(withKeyCapture(modifier, "key"), withKeyCapture(release, "key"));
       return;
     }
 
@@ -372,7 +533,7 @@
       sequence.focus();
     });
     renderKeycaps(view, sequence.value);
-    keys.append(view, sequence);
+    keys.append(view, sequence, captureButton({ input: sequence, kind: "sequence", wrap: keys }));
 
     // 2行以上ある割り当て（Snd の第2引数）が隠れないよう高さを合わせる。
     sequence.addEventListener("input", () => {
@@ -390,16 +551,19 @@
     row.className = "rule-row";
     row.dataset.ruleIndex = String(index);
 
-    const prefix = makeRuleInput("rulePrefix", "前置キー", trigger.prefix, "—", "rule-prefix");
-    if ((trigger.prefix || "").trim()) prefix.classList.add("is-set");
-    prefix.addEventListener("input", () => prefix.classList.toggle("is-set", prefix.value.trim() !== ""));
+    const prefixInput = makeRuleInput("rulePrefix", "前置キー", trigger.prefix, "—", "rule-prefix");
+    if ((trigger.prefix || "").trim()) prefixInput.classList.add("is-set");
+    prefixInput.addEventListener("input", () => prefixInput.classList.toggle("is-set", prefixInput.value.trim() !== ""));
+    const prefix = withKeyCapture(prefixInput, "key");
 
-    const key = makeRuleInput("ruleKey", "トリガキー", trigger.key, "f13", "rule-key");
-    const modifiers = makeRuleInput(
-      "ruleModifiers",
-      "修飾キー",
-      Array.isArray(trigger.modifiers) ? trigger.modifiers.join(" + ") : trigger.modifiers,
-      "Ctrl + Shift");
+    const key = withKeyCapture(makeRuleInput("ruleKey", "トリガキー", trigger.key, "f13", "rule-key"), "key");
+    const modifiers = withKeyCapture(
+      makeRuleInput(
+        "ruleModifiers",
+        "修飾キー",
+        Array.isArray(trigger.modifiers) ? trigger.modifiers.join(" + ") : trigger.modifiers,
+        "Ctrl + Shift"),
+      "modifiers");
 
     const actionType = document.createElement("select");
     actionType.dataset.ruleAction = "";
