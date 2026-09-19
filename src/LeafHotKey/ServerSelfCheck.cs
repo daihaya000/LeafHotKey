@@ -128,6 +128,13 @@ public static class ServerSelfCheck
                     Send(uiServer.Port, "GET", "/styles.css", uiHost, uiOrigin).Status == 200,
                     "styles.css を配信する");
 
+                // タブのアイコンは HTML に埋め込む（/favicon.ico を探しに行かせない）。
+                Check(
+                    "webui.favicon",
+                    index.Body.Contains("rel=\"icon\"", StringComparison.Ordinal) &&
+                    index.Body.Contains("image/svg+xml", StringComparison.Ordinal),
+                    "favicon を data URI で埋め込む");
+
                 var script = Send(uiServer.Port, "GET", "/app.js", uiHost, uiOrigin);
                 Check(
                     "webui.js",
