@@ -333,9 +333,10 @@
     button.setAttribute("aria-label", "押したキーで入力");
     button.title = "押したキーで入力";
     button.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></svg>';
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
       if (capturing && capturing.button === button) disarmCapture();
-      else armCapture({ ...field, button });
+      // detail が 0 のクリックは Enter/Space によるもの（押し離しを録音しないようにする）。
+      else armCapture({ ...field, button, fromKeyboard: event.detail === 0 });
     });
     return button;
   }
@@ -344,6 +345,7 @@
     disarmCapture();
     capturing = field;
     capturing.modifiers = new Set();
+    capturing.armedAt = performance.now();
     field.button.setAttribute("aria-pressed", "true");
     field.wrap.classList.add("is-capturing");
     window.addEventListener("keydown", onCaptureKeyDown, true);
@@ -376,6 +378,8 @@
 
   function onCaptureKeyUp(event) {
     if (!capturing) return;
+    // ボタンを Enter/Space で押した場合、その押し離しを値として拾わない。
+    if (capturing.fromKeyboard && performance.now() - capturing.armedAt < 200) return;
     const key = keyNameOf(event);
     const isModifier = MODIFIER_KEYS.has(event.code || "");
     const held = heldModifiers(event);

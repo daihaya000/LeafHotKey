@@ -154,9 +154,13 @@ if !LOCK_WAIT! GEQ 20 (
 if !LOCK_WAIT! GEQ 6 (
     for /f %%A in ('powershell -NoProfile -Command "if ((Get-Date) - (Get-Item -LiteralPath '%LOCK%' -ErrorAction SilentlyContinue).LastWriteTime -gt (New-TimeSpan -Minutes 3)) { 'stale' }" 2^>nul') do set "STALE=%%A"
     if defined STALE (
-        call :log "removing a lock left by an older run"
         set "STALE="
-        rd /s /q "%LOCK%" >nul 2>nul
+        rem Take the lock over with a rename so two contenders cannot both remove it.
+        move "%LOCK%" "%LOCK%.stale" >nul 2>nul
+        if not errorlevel 1 (
+            call :log "removing a lock left by an older run"
+            rd /s /q "%LOCK%.stale" >nul 2>nul
+        )
     )
 )
 ping 127.0.0.1 -n 2 >nul

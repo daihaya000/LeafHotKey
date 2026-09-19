@@ -298,12 +298,12 @@ public static class Program
 
     private static int RestartHost()
     {
+        var launcher = FindRestartLauncher();
+        if (launcher is not null && StartRestartLauncher(launcher) == ExitOk) return ExitOk;
+
+        // 起動バッチが無い、または起動できなかった場合は、本体を直接起動し直す（アプリを残さない）。
         try
         {
-            var launcher = FindRestartLauncher();
-            if (launcher is not null) return StartRestartLauncher(launcher);
-
-            // 発行物だけの環境にはリポジトリの起動バッチが無いため、従来どおり本体を直接再起動する。
             using var fallback = Process.Start(new ProcessStartInfo
             {
                 FileName = Application.ExecutablePath,
@@ -326,15 +326,22 @@ public static class Program
     /// </summary>
     internal static int StartRestartLauncher(string launcher)
     {
-        using var process = Process.Start(new ProcessStartInfo
+        try
         {
-            FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-            Arguments = $"/d /c ping 127.0.0.1 -n 2 >nul & call \"{launcher}\" restart",
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(launcher) ?? AppContext.BaseDirectory,
-        });
-        return process is null ? ExitCheckFailed : ExitOk;
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+                Arguments = $"/d /c ping 127.0.0.1 -n 2 >nul & call \"{launcher}\" restart",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = Path.GetDirectoryName(launcher) ?? AppContext.BaseDirectory,
+            });
+            return process is null ? ExitCheckFailed : ExitOk;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return ExitCheckFailed;
+        }
     }
 
     private static string? FindRestartLauncher()
