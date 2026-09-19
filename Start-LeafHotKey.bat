@@ -22,7 +22,8 @@ if defined LOCALAPPDATA if not exist "%LOCALAPPDATA%\LeafHotKey" md "%LOCALAPPDA
 if exist "%LOG%" for %%F in ("%LOG%") do if %%~zF GTR 65536 del "%LOG%" >nul 2>nul
 call :log "start mode=[%MODE%]"
 
-for %%D in ("publish" "src\LeafHotKey\bin\Release\net8.0-windows" "src\LeafHotKey\bin\Debug\net8.0-windows") do (
+rem Prefer the build the batch manages for the probes; publish is only a fallback.
+for %%D in ("src\LeafHotKey\bin\Release\net8.0-windows" "src\LeafHotKey\bin\Debug\net8.0-windows" "publish") do (
     if not defined HOST if exist "%ROOT%%%~D\LeafHotKey.exe" set "HOST=%ROOT%%%~D\LeafHotKey.exe"
 )
 

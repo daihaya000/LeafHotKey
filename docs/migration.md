@@ -81,6 +81,7 @@ LeafHotKey は自動起動を自分で登録しない。必要なら利用者が
 | --- | --- |
 | 設定を壊した | 設定画面の「既定に戻す」、または `settings.json.bak` を `settings.json` へ戻す |
 | キー変換を一時的に止めたい | トレイの「一時停止」または `--pause` |
+| トレイの「再起動」でアプリが戻らない | `%LOCALAPPDATA%\LeafHotKey\restart.log` を見る（停止・再ビルド・起動の判定と失敗理由が残る）。他のセッションが同時に `Start-LeafHotKey.bat` を実行していると競合する |
 | LeafHotKey をやめる | `--shutdown` で終了する（入力エンジンも停止する）。AHK のショートカットを戻して `MySet.ahk` を起動する |
 
 元の AHK 一式（`MySet.ahk` / `restart_ahk.bat` / `launch_arc_raiders.bat`）は削除しない。移行が定着するまで復旧用に残す。

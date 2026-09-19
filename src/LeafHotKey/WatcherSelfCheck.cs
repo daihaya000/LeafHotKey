@@ -213,7 +213,8 @@ public static class WatcherSelfCheck
             Directory.CreateDirectory(restartProbe);
             var probeLauncher = Path.Combine(restartProbe, "Start-LeafHotKey.bat");
             var probeResult = Path.Combine(restartProbe, "ran.txt");
-            File.WriteAllText(probeLauncher, "@echo off\r\necho ok>\"%~dp0ran.txt\"\r\n");
+            // 起動バッチは引数 restart で「旧プロセスの終了待ち」を行うため、引数も検証する。
+            File.WriteAllText(probeLauncher, "@echo off\r\necho %~1>\"%~dp0ran.txt\"\r\n");
 
             Program.StartRestartLauncher(probeLauncher);
             var launched = false;
@@ -223,7 +224,8 @@ public static class WatcherSelfCheck
                 launched = File.Exists(probeResult);
             }
 
-            Check("restart.launcher", launched, "トレイ再起動のバッチを cmd.exe 経由で実行できる");
+            var argument = launched ? File.ReadAllText(probeResult).Trim() : string.Empty;
+            Check("restart.launcher", argument == "restart", "トレイ再起動のバッチを restart 引数付きで実行できる");
         }
         finally
         {
