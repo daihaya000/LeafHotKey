@@ -17,22 +17,48 @@ public static class ProcessIcons
     private static readonly Dictionary<string, byte[]?> Cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object Gate = new();
 
-    /// <summary>実行ファイル名（例: CLIPStudioPaint.exe）に対応するアイコン。</summary>
-    public static byte[]? PngFor(string processName)
+    /// <summary>
+    /// 実行ファイル名（例: CLIPStudioPaint.exe）に対応するアイコン。
+    /// 保存済みのフルパスがあればそれを優先し、アプリが起動していなくてもアイコンを出せるようにする。
+    /// </summary>
+    public static byte[]? PngFor(string processName, string? knownPath = null)
     {
         var bare = Normalize(processName);
         if (bare is null) return null;
 
+        var stored = NormalizePath(knownPath);
+        var key = stored ?? bare;
+
         lock (Gate)
         {
             // 見つからなかった結果も残し、行を描くたびに探索しない。
-            if (Cache.TryGetValue(bare, out var cached)) return cached;
+            if (Cache.TryGetValue(key, out var cached)) return cached;
             if (Cache.Count >= 256) Cache.Clear();
 
-            var payload = Load(bare);
-            Cache[bare] = payload;
+            var payload = Load(bare, stored);
+            Cache[key] = payload;
             return payload;
         }
+    }
+
+    /// <summary>実行ファイルのフルパスを探す（起動中のプロセス → App Paths）。見つからなければ null。</summary>
+    public static string? ResolveFullPath(string processName)
+    {
+        var bare = Normalize(processName);
+        return bare is null ? null : ResolvePath(bare);
+    }
+
+    /// <summary>設定に残したフルパスを確かめる。壊れた値や exe 以外は使わない。</summary>
+    private static string? NormalizePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+
+        var value = path.Trim();
+        if (value.Length > 260) return null;
+        if (!value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return null;
+        if (!Path.IsPathFullyQualified(value)) return null;
+
+        return File.Exists(value) ? value : null;
     }
 
     /// <summary>実行ファイル名だけを受け付ける。パス指定や移動は扱わない。</summary>
@@ -46,11 +72,11 @@ public static class ProcessIcons
         return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
     }
 
-    private static byte[]? Load(string bare)
+    private static byte[]? Load(string bare, string? knownPath)
     {
         try
         {
-            var path = ResolvePath(bare);
+            var path = knownPath ?? ResolvePath(bare);
             if (path is null) return null;
 
             using var icon = ExtractIcon(path);

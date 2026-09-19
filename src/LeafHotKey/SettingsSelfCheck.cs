@@ -132,6 +132,24 @@ public static class SettingsSelfCheck
             // 版を指定しない保存は上書きを許す（初期化などの用途）。
             var forced = store.Save(updated, expectedRevision: null);
             Check("save.force", forced.Success, "版を指定しない保存は通る");
+
+            // 検知した実行ファイルのパスは、他の設定を変えずに追記できる（アイコン永続化用）。
+            var chromePath = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
+            var merged = store.MergeAppPaths(new Dictionary<string, string> { ["chrome.exe"] = chromePath });
+            Check(
+                "apppaths.merge",
+                merged.Success && store.Load().AppPaths.TryGetValue("chrome.exe", out var storedPath) && storedPath == chromePath,
+                $"検知した実行ファイルのパスを追記する（{merged.Message}）");
+            Check("apppaths.keep", store.Load().GameProtection.PollIntervalMs == 750, "追記しても他の設定は変わらない");
+
+            var againPaths = store.MergeAppPaths(new Dictionary<string, string> { ["chrome.exe"] = chromePath });
+            Check("apppaths.stable", againPaths.Revision == store.Load().Revision, "同じパスの再追記では版を変えない");
+
+            var brokenPaths = store.MergeAppPaths(new Dictionary<string, string> { ["broken.exe"] = "not-a-path" });
+            Check(
+                "apppaths.invalid-ignored",
+                brokenPaths.Success && !store.Load().AppPaths.ContainsKey("broken.exe"),
+                "exe 以外の値は読み込み時に無視する");
         }
         finally
         {

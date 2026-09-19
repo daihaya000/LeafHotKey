@@ -241,7 +241,9 @@ public sealed class SettingsServer : IDisposable
             case ("GET", "/api/icon"):
             {
                 // ブラウザの img はヘッダを付けられないため、トークンはクエリでも受け付ける（IsAuthorized）。
-                var payload = request.Query("name") is { } name ? ProcessIcons.PngFor(name) : null;
+                var payload = request.Query("name") is { } name
+                    ? ProcessIcons.PngFor(name, _store.Load().AppPaths.TryGetValue(name, out var known) ? known : null)
+                    : null;
                 if (payload is null)
                 {
                     await WriteAsync(stream, 404, "text/plain; charset=utf-8", "no icon").ConfigureAwait(false);
@@ -249,6 +251,47 @@ public sealed class SettingsServer : IDisposable
                 }
 
                 await WriteBinaryAsync(stream, 200, "image/png", payload).ConfigureAwait(false);
+                return;
+            }
+
+            case ("POST", "/api/app-paths"):
+            {
+                // 起動中のアプリや App Paths から実行ファイルのフルパスを拾い、アイコン表示用に設定へ残す。
+                string[] names;
+                try
+                {
+                    using var document = JsonDocument.Parse(request.Body);
+                    names = document.RootElement.TryGetProperty("names", out var list) && list.ValueKind == JsonValueKind.Array
+                        ? list.EnumerateArray()
+                            .Where(item => item.ValueKind == JsonValueKind.String)
+                            .Select(item => item.GetString()!)
+                            .Take(64)
+                            .ToArray()
+                        : Array.Empty<string>();
+                }
+                catch (JsonException ex)
+                {
+                    await WriteJsonError(stream, 400, ex.Message).ConfigureAwait(false);
+                    return;
+                }
+
+                var detected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var name in names)
+                {
+                    if (ProcessIcons.ResolveFullPath(name) is { } fullPath) detected[name] = fullPath;
+                }
+
+                // アイコン用の付随情報なので、保存済み設定の反映通知（エンジン再読み込み）は起こさない。
+                var result = _store.MergeAppPaths(detected);
+                var body = JsonSerializer.Serialize(new
+                {
+                    status = result.Status.ToString().ToLowerInvariant(),
+                    message = result.Message,
+                    paths = detected,
+                    revision = result.Revision,
+                });
+
+                await WriteAsync(stream, result.Success ? 200 : 500, "application/json; charset=utf-8", body).ConfigureAwait(false);
                 return;
             }
 

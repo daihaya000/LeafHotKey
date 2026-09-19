@@ -3,9 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="dark light" />
     <meta name="referrer" content="no-referrer" />
     <title>LeafHotKey 設定</title>
+    <script>
+      // 既定はダーク。読み込み前に適用して白い一瞬の点滅を避ける。
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem("leafhotkey.theme") === "light" ? "light" : "dark";
+      } catch (_) {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -131,7 +140,7 @@
             <div class="card">
               <div class="card-header"><div><h2>アプリ別の設定</h2><p class="fine" id="profile-count-label">設定を読み込んでいます。</p></div><span class="fine">編集すると未保存になります</span></div>
               <div class="notice" id="profile-backend-notice" hidden><p>AutoHotkey バックエンド使用中：このプロファイルは入力変換に使われません（AHK 側のスクリプトが優先されます）。</p></div>
-              <div class="profile-toolbar"><label class="profile-search" for="profile-search"><span class="sr-only">プロファイルを検索</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="profile-search" type="search" autocomplete="off" placeholder="アプリ名または実行ファイル名で検索" /></label><span class="fine" id="profile-results">-</span></div>              <div class="profile-table" role="region" aria-label="プロファイル一覧">
+              <div class="profile-toolbar"><label class="profile-search" for="profile-search"><span class="sr-only">プロファイルを検索</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="profile-search" type="search" autocomplete="off" placeholder="アプリ名または実行ファイル名で検索" /></label><span class="fine" id="profile-results">-</span><button class="button button-primary button-small" type="button" id="add-profile">アプリを追加</button></div>              <div class="profile-table" role="region" aria-label="プロファイル一覧">
                 <div class="profile-table-header" aria-hidden="true"><span>アプリ</span><span>対象プロセス</span><span>ルール</span><span>状態</span><span></span></div>
                 <div id="profile-list"></div>
               </div>
@@ -150,14 +159,17 @@
               <div class="settings-list" style="margin-top:16px">
                 <div class="settings-row"><div class="settings-row-main"><strong>監視間隔</strong><p>プロセス検知を行う間隔です。</p></div><div class="field-inline"><input type="number" id="poll-interval" min="1" step="100" aria-label="監視間隔（ミリ秒）" /><span>ミリ秒</span></div></div>
                 <div class="settings-row"><div class="settings-row-main"><strong>ゲーム終了後の待機</strong><p>復帰対象プロセスが消えた後に再起動するまでの時間です。</p></div><div class="field-inline"><input type="number" id="resume-delay" min="0" step="100" aria-label="復帰までの待機（ミリ秒）" /><span>ミリ秒</span></div></div>
-                <div class="settings-row settings-row-stacked"><div class="settings-row-main"><strong>退避トリガのプロセス</strong><p>1行に1件。検知したら本体を終了します。</p></div><textarea id="stop-triggers" rows="5" spellcheck="false" aria-label="退避トリガのプロセス"></textarea></div>
-                <div class="settings-row settings-row-stacked"><div class="settings-row-main"><strong>復帰を待つプロセス</strong><p>1行に1件。すべて終了してから本体を再起動します。</p></div><textarea id="resume-processes" rows="5" spellcheck="false" aria-label="復帰を待つプロセス"></textarea></div>
               </div>
             </div>
-            <div class="section-heading"><h2>監視対象プロセス</h2><span class="fine" id="process-count-label">-</span></div>
             <section class="card process-table" aria-labelledby="process-title">
-              <h2 id="process-title" class="sr-only">監視対象プロセス一覧</h2>
-              <div class="process-header"><span>プロセス</span><span>用途</span><span>状態</span></div>
+              <div class="card-header"><div><h2 id="process-title">監視するアプリ</h2><p class="fine">検知したら本体を退避し、復帰を待つアプリがすべて終了してから再起動します。</p></div><span class="fine" id="process-count-label">-</span></div>
+              <div class="process-add">
+                <input id="process-add-name" type="text" spellcheck="false" autocomplete="off" placeholder="例: bf6.exe" aria-label="監視する実行ファイル名" />
+                <select id="process-add-role" aria-label="用途"><option value="stop">退避トリガ</option><option value="resume">復帰を待つ</option></select>
+                <button class="button button-primary button-small" type="button" id="process-add">追加</button>
+              </div>
+              <p class="notice" id="process-warning" hidden>退避トリガが空です。ゲーム保護を有効にしたままでは保存できません。</p>
+              <div class="process-header" aria-hidden="true"><span>アプリ</span><span>用途</span><span></span></div>
               <div id="process-list"></div>
             </section>
           </section>
@@ -183,22 +195,27 @@
             </section>
           </section>
 
-          <div class="actions">
-            <span id="save-state" class="save-state">読み込み中…</span>
-            <button class="button button-secondary button-small" type="button" id="reload">再読み込み</button>
-            <button class="button button-destructive button-small" type="button" id="restore">既定に戻す</button>
-            <button class="button button-primary button-small" type="button" id="save">保存して反映</button>
-          </div>
-
-          <dialog id="profile-dialog" aria-labelledby="profile-dialog-title">
-            <form method="dialog" class="dialog-body">
-              <div class="dialog-header"><div><h2 id="profile-dialog-title">プロファイルを編集</h2><p id="profile-dialog-meta">保存後に入力エンジンへ反映されます。</p></div><button class="icon-button" type="submit" value="cancel" aria-label="閉じる">×</button></div>
-              <div class="form-grid">
-                <div class="field"><label for="profile-name">表示名</label><input id="profile-name" required maxlength="80" /></div>
-                <div class="field profile-enabled-field"><label>有効</label><button class="switch" type="button" id="profile-enabled" role="switch" aria-checked="false" aria-label="プロファイルを有効にする"></button></div>
-                <div class="field field-full"><label for="profile-processes">対象プロセス</label><textarea id="profile-processes" rows="3" spellcheck="false" placeholder="例: chrome.exe&#10;1行に1件"></textarea><span class="fine">実行ファイル名を1行に1件入力します。</span></div>
+          <section class="view" data-view="profile-detail" aria-labelledby="profile-detail-title">
+            <div class="detail-bar">
+              <button class="button button-secondary button-small" type="button" id="profile-back">← プロファイル一覧</button>
+              <span class="fine" id="profile-detail-meta">-</span>
+            </div>
+            <div class="page-intro">
+              <p class="eyebrow">アプリ別設定</p>
+              <h1 id="profile-detail-title">プロファイルを編集</h1>
+              <p class="intro-copy">このアプリが前面のときに適用するキー変換を設定します。「編集を適用」のあと、下部の「保存して反映」で確定します。</p>
+            </div>
+            <section class="card" aria-labelledby="profile-basics-title">
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="field"><label for="profile-name">表示名</label><input id="profile-name" required maxlength="80" /></div>
+                  <div class="field profile-enabled-field"><label>有効</label><button class="switch" type="button" id="profile-enabled" role="switch" aria-checked="false" aria-label="プロファイルを有効にする"></button></div>
+                  <div class="field field-full"><label for="profile-processes">対象プロセス</label><textarea id="profile-processes" rows="3" spellcheck="false" placeholder="例: chrome.exe&#10;1行に1件"></textarea><span class="fine">実行ファイル名を1行に1件入力します。アイコンは検知した実行ファイルのパスから次回以降も表示します。</span></div>
+                </div>
               </div>
-              <section class="profile-rules" aria-labelledby="profile-rules-title">
+            </section>
+            <section class="card profile-rules" aria-labelledby="profile-rules-title">
+              <div class="card-body">
                 <div class="section-heading">
                   <div><h2 id="profile-rules-title">ショートカット</h2><p class="fine" id="rule-count-label">-</p></div>
                   <div class="rule-toolbar">
@@ -211,10 +228,17 @@
                   <div id="rule-list"></div>
                 </div>
                 <div class="empty-state" id="rule-empty" hidden><p>条件に合うショートカットがありません。</p></div>
-              </section>
-              <div class="form-actions"><button class="button button-secondary button-small" type="submit" value="cancel">キャンセル</button><button class="button button-primary button-small" type="button" id="apply-profile">編集を適用</button></div>
-            </form>
-          </dialog>
+              </div>
+            </section>
+            <div class="form-actions"><button class="button button-secondary button-small" type="button" id="profile-cancel">キャンセル</button><button class="button button-primary button-small" type="button" id="apply-profile">編集を適用</button></div>
+          </section>
+
+          <div class="actions">
+            <span id="save-state" class="save-state">読み込み中…</span>
+            <button class="button button-secondary button-small" type="button" id="reload">再読み込み</button>
+            <button class="button button-destructive button-small" type="button" id="restore">既定に戻す</button>
+            <button class="button button-primary button-small" type="button" id="save">保存して反映</button>
+          </div>
         </main>
       </div>
     </div>

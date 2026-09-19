@@ -167,6 +167,25 @@ public static class ServerSelfCheck
                 var iconTraversal = Send(server.Port, "GET", "/api/icon?name=..%5C..%5CWindows%5CSystem32%5Ccalc.exe", host, origin);
                 Check("icon.traversal", iconTraversal.Status == 404, "パス指定や親ディレクトリ参照は受け付けない");
 
+                // 検知した実行ファイルのフルパスを残し、次回以降はそれを使ってアイコンを出す。
+                var detectBody = JsonSerializer.Serialize(new { names = new[] { "LeafHotKey.exe", "leafhotkey-absent-app.exe" } });
+                var detect = Send(server.Port, "POST", "/api/app-paths", host, origin, detectBody);
+                Check(
+                    "apppaths.detect",
+                    detect.Status == 200 && detect.Body.Contains("LeafHotKey.exe", StringComparison.Ordinal),
+                    $"検知した実行ファイルのフルパスを返す（{detect.Status}）");
+                Check("apppaths.stored", store.Load().AppPaths.ContainsKey("LeafHotKey.exe"), "検知したパスを設定へ残す");
+                Check("apppaths.absent", !store.Load().AppPaths.ContainsKey("leafhotkey-absent-app.exe"), "見つからない名前は記憶しない");
+
+                var iconStored = Send(server.Port, "GET", "/api/icon?name=LeafHotKey.exe", host, origin);
+                Check(
+                    "icon.stored",
+                    iconStored.Status == 200 && iconStored.Body.Contains("PNG", StringComparison.Ordinal),
+                    "保存済みのパスからもアイコンを返す");
+
+                var detectInvalid = Send(server.Port, "POST", "/api/app-paths", host, origin, "{ broken");
+                Check("apppaths.invalid", detectInvalid.Status == 400, "壊れた本文は 400");
+
                 Check(
                     "webui.port.fixed",
                     SettingsServer.DefaultPort == 17832,

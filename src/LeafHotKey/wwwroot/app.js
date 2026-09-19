@@ -10,6 +10,7 @@
   const titles = {
     overview: { section: "概要", current: "常駐ステータス" },
     profiles: { section: "設定", current: "プロファイル" },
+    "profile-detail": { section: "設定", current: "アプリ別設定", nav: "profiles" },
     safety: { section: "安全", current: "ゲーム保護" },
     settings: { section: "システム", current: "基本設定" },
   };
@@ -57,10 +58,13 @@
   function showView(viewName) {
     const title = titles[viewName] || titles.overview;
     views.forEach((view) => view.classList.toggle("is-active", view.dataset.view === viewName));
+    // アプリ別設定はプロファイルの下層ページとして扱う。
+    const navTarget = title.nav || viewName;
     document.querySelectorAll(".nav-item").forEach((item) => {
-      if (item.dataset.viewTarget === viewName) item.setAttribute("aria-current", "page");
+      if (item.dataset.viewTarget === navTarget) item.setAttribute("aria-current", "page");
       else item.removeAttribute("aria-current");
     });
+    document.body.dataset.view = viewName;
     const section = document.querySelector(".breadcrumbs strong");
     if (section) section.textContent = title.section;
     const current = el("breadcrumb-current");
@@ -97,29 +101,42 @@
     return `${processes} · ${rules}ルール`;
   }
 
-  function makeProfileRow(profile, compact) {
-    const row = document.createElement("div");
-    row.className = compact ? "list-row" : "profile-row";
-
+  // 実行ファイルのアイコン。取得できない場合はモノグラムのままにする。
+  function makeAppIcon(processName, fallbackText) {
     const icon = document.createElement("div");
     icon.className = "app-icon";
     icon.setAttribute("aria-hidden", "true");
-    // 対象実行ファイルのアイコンを出す。取得できない場合はモノグラムのままにする。
-    const processName = (profile.processNames || [])[0];
+
     if (processName) {
       const image = document.createElement("img");
       image.alt = "";
       image.loading = "lazy";
       image.src = `api/icon?name=${encodeURIComponent(processName)}`;
-      image.addEventListener("load", () => icon.classList.add("app-icon-image"));
+      image.addEventListener("load", () => {
+        icon.classList.add("app-icon-image");
+        rememberAppPath(processName);
+      });
       image.addEventListener("error", () => {
         image.remove();
-        icon.textContent = profileInitials(profile);
+        icon.textContent = fallbackText;
       });
       icon.append(image);
     } else {
-      icon.textContent = profileInitials(profile);
+      icon.textContent = fallbackText;
     }
+
+    return icon;
+  }
+
+  function profileIndex(profile) {
+    return (settings?.profiles || []).indexOf(profile);
+  }
+
+  function makeProfileRow(profile, compact) {
+    const row = document.createElement("div");
+    row.className = compact ? "list-row" : "profile-row";
+
+    const icon = makeAppIcon((profile.processNames || [])[0], profileInitials(profile));
 
     const name = document.createElement("strong");
     name.textContent = profile.name || profile.id || "名称未設定";
@@ -174,12 +191,24 @@
     });
     state.append(badge, toggle);
 
+    const actions = document.createElement("div");
+    actions.className = "profile-actions";
     const edit = document.createElement("button");
     edit.type = "button";
     edit.className = "button button-secondary button-small";
     edit.textContent = "編集";
-    edit.addEventListener("click", () => openProfileEditor((settings.profiles || []).indexOf(profile)));
-    row.append(identity, processes, rules, state, edit);
+    edit.addEventListener("click", () => openProfileEditor(profileIndex(profile)));
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "icon-button icon-button-danger";
+    remove.textContent = "×";
+    remove.title = "削除";
+    remove.setAttribute("aria-label", `${profile.name || profile.id || "プロファイル"}を削除`);
+    remove.addEventListener("click", () => deleteProfile(profileIndex(profile)));
+
+    actions.append(edit, remove);
+    row.append(identity, processes, rules, state, actions);
     return row;
   }
 
@@ -424,13 +453,48 @@
     if (!settings?.profiles?.[index]) return;
     editingProfileIndex = index;
     const profile = settings.profiles[index];
-    el("profile-dialog-title").textContent = `${profile.name || profile.id || "プロファイル"}を編集`;
-    el("profile-dialog-meta").textContent = `ID: ${profile.id || "-"}`;
+    el("profile-detail-title").textContent = profile.name || profile.id || "プロファイル";
+    el("profile-detail-meta").textContent = `ID: ${profile.id || "-"}`;
     el("profile-name").value = profile.name || "";
     el("profile-processes").value = (profile.processNames || []).join("\n");
     setSwitch(el("profile-enabled"), profile.enabled !== false);
     openRuleEditor(profile.rules);
-    el("profile-dialog").showModal();
+    showView("profile-detail");
+  }
+
+  function closeProfileEditor() {
+    editingProfileIndex = null;
+    showView("profiles");
+  }
+
+  // 追加したアプリは ID も自動で振る（表示名と対象プロセスは編集ページで決める）。
+  function addProfile() {
+    if (!settings) return;
+    if (!settings.profiles) settings.profiles = [];
+
+    const used = new Set(settings.profiles.map((profile) => profile.id));
+    let id = "";
+    for (let suffix = 1; !id; suffix++) {
+      if (!used.has(`app-${suffix}`)) id = `app-${suffix}`;
+    }
+
+    settings.profiles.push({ id, name: "新しいアプリ", enabled: true, processNames: [], rules: [] });
+    markDirty();
+    renderProfiles();
+    renderOverview();
+    openProfileEditor(settings.profiles.length - 1);
+  }
+
+  function deleteProfile(index) {
+    const profile = settings?.profiles?.[index];
+    if (!profile) return;
+    if (!window.confirm(`「${profile.name || profile.id}」を削除します。よろしいですか？`)) return;
+
+    settings.profiles.splice(index, 1);
+    markDirty();
+    renderProfiles();
+    renderOverview();
+    if (editingProfileIndex !== null) closeProfileEditor();
   }
 
   function applyProfileEditor() {
@@ -443,11 +507,12 @@
       profile.enabled = el("profile-enabled").getAttribute("aria-checked") === "true";
       profile.processNames = lines(el("profile-processes").value);
       profile.rules = rulesFromDraft();
-      el("profile-dialog").close();
       markDirty();
       renderProfiles();
       renderOverview();
       showAlert("");
+      closeProfileEditor();
+      detectAppPaths();
     } catch (error) {
       showAlert(error.message || "プロファイルを更新できませんでした。");
     }
@@ -486,37 +551,101 @@
     }
   }
 
+  function processRoles(name) {
+    const protection = settings.gameProtection || {};
+    const has = (list) => (list || []).some((value) => value.toLocaleLowerCase() === name.toLocaleLowerCase());
+    const roles = [];
+    if (has(protection.stopTriggerProcessNames)) roles.push(["退避トリガ", "badge-accent"]);
+    if (has(protection.resumeProcessNames)) roles.push(["復帰を待つ", "badge-success"]);
+    return roles;
+  }
+
   function renderProcessList() {
     if (!settings) return;
     const protection = settings.gameProtection || {};
-    const stop = protection.stopTriggerProcessNames || [];
-    const resume = protection.resumeProcessNames || [];
+    const names = [...new Set([...(protection.stopTriggerProcessNames || []), ...(protection.resumeProcessNames || [])])];
     const list = el("process-list");
     list.textContent = "";
 
-    for (const [name, role] of stop.map((value) => [value, "退避トリガ"]).concat(resume.map((value) => [value, "復帰待ち"]))) {
+    names.forEach((name) => {
       const row = document.createElement("div");
       row.className = "process-row";
-      const processName = document.createElement("span");
-      processName.className = "process-name";
-      processName.textContent = name;
-      const note = document.createElement("span");
-      note.className = "process-note";
-      note.textContent = role;
-      const badge = document.createElement("span");
-      badge.className = "badge badge-success";
-      badge.textContent = "監視対象";
-      row.append(processName, note, badge);
-      list.append(row);
-    }
 
-    if (stop.length + resume.length === 0) {
+      const identity = document.createElement("div");
+      identity.className = "process-identity";
+      const label = document.createElement("span");
+      label.className = "process-name";
+      label.textContent = name;
+      identity.append(makeAppIcon(name, name.slice(0, 2).toUpperCase()), label);
+
+      const roles = document.createElement("div");
+      roles.className = "process-roles";
+      processRoles(name).forEach(([text, kind]) => {
+        const badge = document.createElement("span");
+        badge.className = `badge ${kind}`;
+        badge.textContent = text;
+        roles.append(badge);
+      });
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "icon-button icon-button-danger";
+      remove.textContent = "×";
+      remove.title = "監視から外す";
+      remove.setAttribute("aria-label", `${name}を監視から外す`);
+      remove.addEventListener("click", () => removeProcess(name));
+
+      row.append(identity, roles, remove);
+      list.append(row);
+    });
+
+    if (names.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
-      empty.textContent = "監視対象プロセスはありません。";
+      empty.textContent = "監視するアプリはまだありません。";
       list.append(empty);
     }
-    el("process-count-label").textContent = `${stop.length + resume.length}件`;
+
+    el("process-count-label").textContent = `${names.length}件`;
+    const warning = el("process-warning");
+    if (warning) warning.hidden = protection.enabled === false || (protection.stopTriggerProcessNames || []).length > 0;
+  }
+
+  function addProcess() {
+    if (!settings) return;
+    const input = el("process-add-name");
+    // フルパスを貼られても実行ファイル名として扱う（照合は名前で行う）。
+    const name = input.value.trim().split(/[\\/]/).pop();
+    if (!name) {
+      input.focus();
+      return;
+    }
+
+    const protection = settings.gameProtection || (settings.gameProtection = {});
+    const key = el("process-add-role").value === "resume" ? "resumeProcessNames" : "stopTriggerProcessNames";
+    if (!protection[key]) protection[key] = [];
+    if (!protection[key].some((value) => value.toLocaleLowerCase() === name.toLocaleLowerCase())) protection[key].push(name);
+
+    input.value = "";
+    input.focus();
+    markDirty();
+    renderProcessList();
+    renderOverview();
+    detectAppPaths();
+  }
+
+  function removeProcess(name) {
+    const protection = settings?.gameProtection;
+    if (!protection) return;
+
+    ["stopTriggerProcessNames", "resumeProcessNames"].forEach((key) => {
+      if (!protection[key]) return;
+      protection[key] = protection[key].filter((value) => value.toLocaleLowerCase() !== name.toLocaleLowerCase());
+    });
+
+    markDirty();
+    renderProcessList();
+    renderOverview();
   }
 
   function renderOverview() {
@@ -561,8 +690,6 @@
     setSwitch(el("protection-enabled"), protection.enabled !== false);
     el("poll-interval").value = protection.pollIntervalMs ?? 1000;
     el("resume-delay").value = protection.resumeDelayMs ?? 1000;
-    el("stop-triggers").value = (protection.stopTriggerProcessNames || []).join("\n");
-    el("resume-processes").value = (protection.resumeProcessNames || []).join("\n");
     const enabled = protection.enabled !== false;
     el("protection-summary").textContent = enabled
       ? "ゲーム保護が有効です。危険なプロセスを検知すると入力エンジンを停止します。"
@@ -616,8 +743,6 @@
     protection.enabled = el("protection-enabled").getAttribute("aria-checked") === "true";
     protection.pollIntervalMs = Number(el("poll-interval").value);
     protection.resumeDelayMs = Number(el("resume-delay").value);
-    protection.stopTriggerProcessNames = lines(el("stop-triggers").value);
-    protection.resumeProcessNames = lines(el("resume-processes").value);
     markDirty();
     renderProcessList();
     renderOverview();
@@ -625,6 +750,49 @@
       ? "ゲーム保護が有効です。危険なプロセスを検知すると入力エンジンを停止します。"
       : "ゲーム保護は無効です。危険なプロセスを検知しても退避しません。";
     el("protection-summary").textContent = summary;
+  }
+
+  // 実際にアイコンを出せた実行ファイルは、その場でフルパスを設定へ残す。
+  const pendingPaths = new Set();
+  let pathFlushScheduled = false;
+
+  function rememberAppPath(processName) {
+    if (!processName || (settings?.appPaths || {})[processName]) return;
+
+    pendingPaths.add(processName);
+    if (pathFlushScheduled) return;
+
+    // 一覧を描くたびに要求を散らさないよう、少しだけまとめる。
+    pathFlushScheduled = true;
+    window.setTimeout(() => {
+      pathFlushScheduled = false;
+      const names = [...pendingPaths];
+      pendingPaths.clear();
+      mergeAppPaths(names);
+    }, 300);
+  }
+
+  async function mergeAppPaths(names) {
+    if (!names.length) return;
+
+    const result = await api("/api/app-paths", { method: "POST", body: JSON.stringify({ names }) });
+    if (result.status !== 200 || !result.payload) return;
+
+    settings.appPaths = { ...(settings.appPaths || {}), ...(result.payload.paths || {}) };
+    // サーバー側が追記して版が進むため、保持している版も合わせる。
+    if (result.payload.revision) revision = result.payload.revision;
+  }
+
+  // 起動中のアプリや App Paths からフルパスを拾い、アイコンを次回以降も出せるようにする。
+  async function detectAppPaths() {
+    if (!settings) return;
+    const known = settings.appPaths || {};
+    const names = new Set();
+    (settings.profiles || []).forEach((profile) => (profile.processNames || []).forEach((name) => names.add(name)));
+    const protection = settings.gameProtection || {};
+    [...(protection.stopTriggerProcessNames || []), ...(protection.resumeProcessNames || [])].forEach((name) => names.add(name));
+
+    await mergeAppPaths([...names].filter((name) => name && !known[name]));
   }
 
   async function loadSettings() {
@@ -639,6 +807,7 @@
       settings = JSON.parse(result.payload.json);
       revision = result.payload.revision;
       editingProfileIndex = null;
+      await detectAppPaths();
       renderAll();
       showAlert("");
       setSaveState("保存済み", "ok");
@@ -790,7 +959,7 @@
       syncSettingsFromForms();
     });
   });
-  ["poll-interval", "resume-delay", "stop-triggers", "resume-processes", "backend-script", "backend-executable"].forEach((id) => {
+  ["poll-interval", "resume-delay", "backend-script", "backend-executable"].forEach((id) => {
     el(id).addEventListener("input", syncSettingsFromForms);
     el(id).addEventListener("change", syncSettingsFromForms);
   });
@@ -814,20 +983,22 @@
     renderRuleList();
   });
   el("apply-profile").addEventListener("click", applyProfileEditor);
-  el("profile-dialog").addEventListener("close", () => { editingProfileIndex = null; });
+  el("profile-back").addEventListener("click", closeProfileEditor);
+  el("profile-cancel").addEventListener("click", closeProfileEditor);
+  el("add-profile").addEventListener("click", addProfile);
+  el("process-add").addEventListener("click", addProcess);
+  el("process-add-name").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addProcess();
+  });
 
   el("save").addEventListener("click", save);
   el("reload").addEventListener("click", () => { loadSettings(); loadStatus(); loadEventLog(); });
   el("restore").addEventListener("click", restore);
 
-  root.dataset.theme = (() => {
-    try {
-      const saved = localStorage.getItem("leafhotkey.theme");
-      return saved === "dark" || saved === "light" ? saved : "light";
-    } catch (_) {
-      return "light";
-    }
-  })();
+  // 既定はダーク（index.html のインラインスクリプトと同じ判定）。
+  root.dataset.theme = root.dataset.theme === "light" ? "light" : "dark";
   updateThemeIcon();
   showView("overview");
   loadSettings();

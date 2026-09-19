@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace LeafHotKey;
 
@@ -21,6 +22,12 @@ public sealed class SettingsSnapshot
 
     /// <summary>入力変換を担当するバックエンド。</summary>
     public required BackendSettings Backend { get; init; }
+
+    /// <summary>
+    /// 検知した実行ファイルのフルパス（実行ファイル名 → フルパス）。
+    /// アイコン表示のためだけに使う。アプリが起動していなくてもアイコンを出せるように残す。
+    /// </summary>
+    public IReadOnlyDictionary<string, string> AppPaths { get; init; } = new Dictionary<string, string>();
 }
 
 /// <summary>保存要求の結果。</summary>
@@ -177,6 +184,52 @@ public sealed class SettingsStore
     /// <summary>既定設定へ戻す。現在の内容はバックアップに残す。</summary>
     public SaveResult RestoreDefaults() => Save(ReadText(_defaultsPath), expectedRevision: null);
 
+    /// <summary>
+    /// 検知した実行ファイルのパスを設定へ追記する。他の内容は変えず、版も新しいものへ進める。
+    /// アイコン用の付随情報なので、追記できなければ既存の内容を返すだけにする。
+    /// </summary>
+    public SaveResult MergeAppPaths(IReadOnlyDictionary<string, string> detected)
+    {
+        lock (_gate)
+        {
+            EnsureExists();
+
+            var snapshot = Load();
+            var merged = new Dictionary<string, string>(snapshot.AppPaths, StringComparer.OrdinalIgnoreCase);
+            var added = 0;
+
+            foreach (var (name, path) in detected)
+            {
+                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path)) continue;
+                if (merged.TryGetValue(name, out var existing) && string.Equals(existing, path, StringComparison.OrdinalIgnoreCase)) continue;
+
+                merged[name.Trim()] = path.Trim();
+                added++;
+            }
+
+            if (added == 0)
+            {
+                return new SaveResult { Status = SaveStatus.Saved, Message = "追記なし", Revision = snapshot.Revision };
+            }
+
+            JsonObject root;
+            try
+            {
+                root = JsonNode.Parse(snapshot.Json)?.AsObject() ?? throw new InvalidDataException("設定を読み込めません。");
+            }
+            catch (JsonException ex)
+            {
+                return new SaveResult { Status = SaveStatus.Invalid, Message = ex.Message };
+            }
+
+            var node = root["appPaths"] as JsonObject ?? new JsonObject();
+            root["appPaths"] = node;
+            foreach (var (name, path) in merged) node[name] = path;
+
+            return Save(root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), expectedRevision: null);
+        }
+    }
+
     /// <summary>内容から版を計算する。</summary>
     public static string RevisionOf(string json)
     {
@@ -204,12 +257,35 @@ public sealed class SettingsStore
                 Profiles = profiles,
                 ImeDisableBeforeSend = ReadImeDisable(document.RootElement),
                 Backend = BackendSettings.Read(document.RootElement),
+                AppPaths = ReadAppPaths(document.RootElement),
             };
         }
         finally
         {
             File.Delete(temp);
         }
+    }
+
+    /// <summary>appPaths を読む。アイコン用の付随情報なので、壊れた項目は黙って捨てる。</summary>
+    private static IReadOnlyDictionary<string, string> ReadAppPaths(JsonElement root)
+    {
+        var paths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!root.TryGetProperty("appPaths", out var node) || node.ValueKind != JsonValueKind.Object) return paths;
+
+        foreach (var entry in node.EnumerateObject())
+        {
+            if (entry.Value.ValueKind != JsonValueKind.String) continue;
+
+            var name = entry.Name.Trim();
+            var path = entry.Value.GetString()?.Trim();
+            if (name.Length is 0 or > 128) continue;
+            if (string.IsNullOrEmpty(path) || path.Length > 260) continue;
+            if (!path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
+
+            paths[name] = path;
+        }
+
+        return paths;
     }
 
     /// <summary>input.imeDisableBeforeSend を読む。指定が無い場合は有効として扱う。</summary>

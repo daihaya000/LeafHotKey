@@ -20,6 +20,8 @@
       }
 
       html[data-theme="dark"] {
+        /* OS 標準のコントロール（スクロールバー・数値入力・select）も暗くする。 */
+        color-scheme: dark;
         --label: var(--label-dark);
         --label-secondary: var(--label-secondary-dark);
         --label-tertiary: color-mix(in srgb, var(--label) 30%, transparent);
@@ -32,6 +34,8 @@
       }
 
       * { box-sizing: border-box; }
+
+      html[data-theme="light"] { color-scheme: light; }
 
       html, body { min-height: 100%; }
 
@@ -157,7 +161,7 @@
         color: var(--label-secondary);
         font-size: 12px;
       }
-      .sidebar-footer span:first-of-type { min-width: 0; flex: 1; }
+      .sidebar-footer > span:not(.online-dot) { min-width: 0; flex: 1; }
       .online-dot, .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 9999px; background: var(--success); }
       .offline-dot { background: var(--label-tertiary); }
       .icon-button {
@@ -211,6 +215,8 @@
         margin: 0 auto;
         padding: 32px;
       }
+      /* アプリ別設定はルール表を広く見せるため、本文幅を広げる。 */
+      body[data-view="profile-detail"] .content { width: min(100%, 1440px); }
       .view { display: none; }
       .view.is-active { display: block; }
       .page-intro { margin-bottom: 24px; }
@@ -384,7 +390,7 @@
       .profile-search input { width: 100%; min-height: 40px; padding: 8px 12px 8px 38px; border: 1px solid var(--separator); border-radius: 10px; background: var(--surface-secondary); color: var(--label); font-size: 13px; }
       .profile-search input::placeholder { color: var(--label-tertiary); }
       .profile-table { overflow: hidden; border-top: 1px solid var(--separator); }
-      .profile-table-header, .profile-row { display: grid; grid-template-columns: minmax(185px, 1.1fr) minmax(160px, 1fr) 76px 136px 58px; align-items: center; gap: 16px; padding: 12px 24px; }
+      .profile-table-header, .profile-row { display: grid; grid-template-columns: minmax(185px, 1.1fr) minmax(160px, 1fr) 76px 136px 104px; align-items: center; gap: 16px; padding: 12px 24px; }
       .profile-table-header { min-height: 40px; background: var(--surface-secondary); color: var(--label-secondary); font-size: 11px; font-weight: 650; letter-spacing: 0.04em; }
       .profile-row { min-height: 76px; border-top: 1px solid var(--separator); }
       .profile-row:hover { background: var(--surface-secondary); }
@@ -395,7 +401,10 @@
       .profile-processes { overflow: hidden; color: var(--label-secondary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
       .profile-rule-count { color: var(--label-secondary); font-size: 12px; white-space: nowrap; }
       .profile-state { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-      .profile-row > .button { justify-self: end; }
+      .profile-actions { display: flex; align-items: center; gap: 4px; justify-self: end; }
+      .icon-button-danger { color: var(--danger); }
+      .icon-button-danger:hover { color: var(--danger); }
+      .detail-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 
       .switch {
         position: relative;
@@ -412,14 +421,19 @@
       .switch::after { content: ""; position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16); transition: transform 120ms ease; }
       .switch[aria-checked="true"] { background: var(--success); }
       .switch[aria-checked="true"]::after { transform: translateX(20px); }
+      /* ダークでは track も knob も暗いと見分けられないため、knob を明るくする。 */
+      html[data-theme="dark"] .switch::after { background: var(--label-dark); }
 
       .process-table { overflow: hidden; }
-      .process-header, .process-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(116px, 0.7fr) minmax(110px, 0.6fr); align-items: center; gap: 16px; padding: 12px 20px; }
+      .process-add { display: flex; align-items: center; gap: 8px; padding: 16px 20px 0; }
+      .process-add input { min-width: 0; flex: 1; max-width: 320px; }
+      .process-header, .process-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(150px, 0.8fr) 40px; align-items: center; gap: 16px; padding: 12px 20px; }
       .process-header { min-height: 42px; background: var(--surface-secondary); color: var(--label-secondary); font-size: 11px; font-weight: 650; letter-spacing: 0.04em; }
       .process-row { min-height: 66px; border-top: 1px solid var(--separator); font-size: 13px; }
+      .process-identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
+      .process-roles { display: flex; flex-wrap: wrap; gap: 6px; }
       .process-name { min-width: 0; overflow: hidden; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-      .process-note { color: var(--label-secondary); font-size: 12px; }
-      .process-row .badge { justify-self: start; }
+      .process-row .icon-button { justify-self: end; }
 
       .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
       .field { display: grid; gap: 7px; }
@@ -440,25 +454,8 @@
       .empty-state { padding: 40px 24px; text-align: center; }      .empty-state svg { width: 28px; height: 28px; margin-bottom: 12px; color: var(--label-tertiary); }
       .empty-state p { margin-bottom: 16px; color: var(--label-secondary); font-size: 14px; }
 
-      dialog {
-        width: min(820px, calc(100vw - 32px));
-        max-height: calc(100vh - 32px);
-        padding: 0;
-        overflow: auto;
-        border: 1px solid var(--separator);
-        border-radius: 20px;
-        background: var(--surface);
-        color: var(--label);
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-      }
-      dialog::backdrop { background: rgba(0, 0, 0, 0.22); backdrop-filter: blur(4px); }
-      .dialog-body { padding: 24px; }
-      .dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-      .dialog-body h2 { margin-bottom: 8px; }
-      .dialog-body > p, .dialog-header p { margin-bottom: 20px; color: var(--label-secondary); font-size: 13px; }
       .profile-enabled-field { align-content: start; }
       .profile-enabled-field .switch { margin-top: 9px; }
-      .profile-rules { margin-top: 24px; }
       .profile-rules .section-heading { margin: 0 0 12px; }
       .rule-toolbar { display: flex; align-items: center; gap: 8px; }
       .rule-search {
@@ -575,8 +572,8 @@
         .summary-card { min-height: auto; }
         .process-header { display: none; }
         .process-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px 16px; }
-        .process-row .process-note { grid-column: 1; grid-row: 2; }
-        .process-row .badge { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+        .process-row .process-roles { grid-column: 1; grid-row: 2; }
+        .process-row .icon-button { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
         .card-header, .card-body { padding-right: 16px; padding-left: 16px; }
         .list-row { padding-right: 16px; padding-left: 16px; }
         .profile-toolbar { align-items: stretch; flex-direction: column; padding: 16px; }
@@ -587,7 +584,7 @@
         .profile-processes { grid-column: 1; grid-row: 2; }
         .profile-rule-count { grid-column: 2; grid-row: 2; }
         .profile-state { grid-column: 1; grid-row: 3; justify-content: flex-start; }
-        .profile-row > .button { grid-column: 2; grid-row: 3; }
+        .profile-actions { grid-column: 2; grid-row: 3; }
         .section-heading { margin-top: 24px; }
       }
 
@@ -595,7 +592,16 @@
         *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
       }
 
-textarea, input { font: inherit; color: inherit; }
+textarea, input, select { font: inherit; }
+/* 素の input/select/textarea が OS 既定の白背景にならないようにする（ダークでの白地に白文字を防ぐ）。 */
+input, select, textarea {
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--surface-secondary);
+  color: var(--label);
+  padding: 8px 10px;
+}
+input::placeholder, textarea::placeholder { color: var(--label-tertiary); }
 :where(textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .alert {
   margin: 0 0 16px;
@@ -624,8 +630,6 @@ textarea, input { font: inherit; color: inherit; }
 .field-inline-wide input { width: 100%; font-size: 13px; }
 .field-inline select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--separator); border-radius: 10px; background: var(--surface); color: var(--label); font-size: 13px; }
 .event-log { max-height: 320px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--separator); border-radius: 12px; background: var(--surface-secondary); color: var(--label-secondary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow: auto; }
-.settings-row-stacked { display: grid; align-items: start; }
-.settings-row-stacked textarea { width: 100%; }
 .actions {
   position: sticky;
   bottom: 0;
@@ -648,6 +652,4 @@ textarea, input { font: inherit; color: inherit; }
 @media (max-width: 680px) {
   .mobile-nav { display: flex; padding: 8px 16px; border-bottom: 1px solid var(--separator); background: var(--surface); }
   .actions { margin-right: -16px; margin-left: -16px; padding: 12px 16px; }
-  dialog { width: min(100vw - 16px, 1040px); max-height: calc(100vh - 16px); }
-  .dialog-body { padding: 16px; }
 }
