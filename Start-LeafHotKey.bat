@@ -97,20 +97,21 @@ goto select
 echo Building Release from !HEAD!...
 call :log "building from !HEAD!"
 dotnet build "%ROOT%src\LeafHotKey\LeafHotKey.csproj" -c Release --nologo
-if errorlevel 1 (
-    echo LeafHotKey build failed.
-    call :log "build failed: LeafHotKey"
-    exit /b 1
-)
+if errorlevel 1 goto build_failed
 dotnet build "%ROOT%src\LeafHotKeyEngine\LeafHotKeyEngine.csproj" -c Release --nologo
-if errorlevel 1 (
-    echo LeafHotKeyEngine build failed.
-    call :log "build failed: LeafHotKeyEngine"
-    exit /b 1
-)
+if errorlevel 1 goto build_failed
 >"%MARKER%" echo !HEAD!
 set "HOST=%HOST_RELEASE%"
 call :log "build done"
+goto select
+
+:build_failed
+rem Start the existing build when the rebuild fails, so a restart never leaves the app gone.
+echo Build failed. Starting the existing build.
+call :log "build failed; starting the existing build"
+if not exist "%HOST_RELEASE%" exit /b 1
+set "HOST=%HOST_RELEASE%"
+goto select
 
 :select
 if defined HEAD if exist "%HOST_RELEASE%" set "HOST=%HOST_RELEASE%"
@@ -122,6 +123,8 @@ if not defined HOST (
 )
 
 rem The host starts the input engine itself (LeafHotKeyEngine.exe) and keeps the WebUI alive.
+rem Tell the app that it came back from a restart so it can say so in the tray.
+if /i "%MODE%"=="restart" set "LEAFHOTKEY_RESTARTED=1"
 start "" "%HOST%"
 call :log "started [%HOST%]"
 exit /b 0
@@ -150,7 +153,6 @@ if !WAIT_COUNT! GEQ 30 (
     call :log "timed out waiting for the host to stop"
     exit /b 1
 )
-powershell -NoProfile -Command "Start-Sleep -Seconds 1"
 goto wait_loop
 
 :log

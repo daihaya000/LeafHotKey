@@ -166,6 +166,12 @@ public static class Program
                 void OnStatusChanged() => tray.RefreshStatus();
                 supervisor.StatusChanged += OnStatusChanged;
 
+                // 起動バッチ経由の再起動では、戻ってきたことが分かるように通知する。
+                if (Environment.GetEnvironmentVariable("LEAFHOTKEY_RESTARTED") == "1")
+                {
+                    tray.Notify("再起動しました。");
+                }
+
                 Action requestRestart = () => restartRequested = true;
                 tray.RestartRequested += requestRestart;
                 Application.Run(tray);
