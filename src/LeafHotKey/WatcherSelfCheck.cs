@@ -206,6 +206,30 @@ public static class WatcherSelfCheck
 
         Check("settings.invalid", rejected, "保護有効なのに停止対象が空の設定を拒否する");
 
+        // トレイ再起動は起動バッチを cmd.exe 経由で呼ぶ。引数の渡し方が崩れるとバッチが 1 回も実行されない。
+        var restartProbe = Path.Combine(Path.GetTempPath(), "leafhotkey-restart-probe-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(restartProbe);
+            var probeLauncher = Path.Combine(restartProbe, "Start-LeafHotKey.bat");
+            var probeResult = Path.Combine(restartProbe, "ran.txt");
+            File.WriteAllText(probeLauncher, "@echo off\r\necho ok>\"%~dp0ran.txt\"\r\n");
+
+            Program.StartRestartLauncher(probeLauncher);
+            var launched = false;
+            for (var i = 0; i < 40 && !launched; i++)
+            {
+                Thread.Sleep(250);
+                launched = File.Exists(probeResult);
+            }
+
+            Check("restart.launcher", launched, "トレイ再起動のバッチを cmd.exe 経由で実行できる");
+        }
+        finally
+        {
+            Directory.Delete(restartProbe, recursive: true);
+        }
+
         // 入力エンジンの場所は、発行物（同じフォルダー）と開発時のビルド出力の両方を解決する。
         var probeRoot = Path.Combine(Path.GetTempPath(), "leafhotkey-engine-probe-" + Guid.NewGuid().ToString("N"));
         try

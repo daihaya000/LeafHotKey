@@ -295,21 +295,7 @@ public static class Program
         try
         {
             var launcher = FindRestartLauncher();
-            if (launcher is not null)
-            {
-                // トレイ再起動も通常起動と同じバッチを通し、ソース更新時の Release ビルド判定を行う。
-                // 旧プロセスが Mutex を解放してからバッチが --status を見るよう短く待つ。
-                var command = $"timeout /t 1 /nobreak >nul & call \"{launcher}\"";
-                using var process = Process.Start(new ProcessStartInfo
-                {
-                    FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-                    ArgumentList = { "/d", "/c", command },
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WorkingDirectory = Path.GetDirectoryName(launcher) ?? AppContext.BaseDirectory,
-                });
-                return process is null ? ExitCheckFailed : ExitOk;
-            }
+            if (launcher is not null) return StartRestartLauncher(launcher);
 
             // 発行物だけの環境にはリポジトリの起動バッチが無いため、従来どおり本体を直接再起動する。
             using var fallback = Process.Start(new ProcessStartInfo
@@ -324,6 +310,25 @@ public static class Program
         {
             return ExitCheckFailed;
         }
+    }
+
+    /// <summary>
+    /// トレイ再起動も通常起動と同じバッチを通し、ソース更新時の Release ビルド判定を行う。
+    /// 引数は ArgumentList ではなく生のコマンド行で渡す（ArgumentList の引用符エスケープ `\"` は cmd.exe が解釈できず、バッチが 1 回も実行されない）。
+    /// 待機は timeout ではなく ping を使う（timeout はコンソール入力が無いと待たずに失敗する）。
+    /// 旧プロセスが Mutex と制御パイプを解放してからバッチが --status を見るよう短く待つ。
+    /// </summary>
+    internal static int StartRestartLauncher(string launcher)
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+            Arguments = $"/d /c ping 127.0.0.1 -n 2 >nul & call \"{launcher}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(launcher) ?? AppContext.BaseDirectory,
+        });
+        return process is null ? ExitCheckFailed : ExitOk;
     }
 
     private static string? FindRestartLauncher()
