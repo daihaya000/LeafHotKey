@@ -522,6 +522,41 @@
       .rule-row .rule-prefix.is-set { background: var(--fill); font-weight: 600; }
       .rule-detail { display: flex; gap: 6px; min-width: 0; }
       .rule-detail textarea { min-height: 30px; resize: vertical; }
+      /* 送信内容はキーキャップで見せ、フォーカス中だけ生テキストを編集する。 */
+      .rule-keys { position: relative; flex: 1; min-width: 0; }
+      .keys-view {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 3px;
+        min-height: 30px;
+        padding: 4px 8px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: var(--surface-secondary);
+        cursor: text;
+      }
+      .rule-keys:not(.is-editing) .keys-view:hover { border-color: var(--separator); }
+      .rule-keys.is-editing .keys-view { display: none; }
+      .rule-keys:not(.is-editing) textarea { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; opacity: 0; }
+      .keys-line { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-height: 20px; }
+      .keys-line.is-empty { color: var(--label-tertiary); font-size: 12px; }
+      .keys-step { width: 6px; }
+      .keycap {
+        display: inline-flex;
+        min-height: 20px;
+        align-items: center;
+        padding: 0 7px;
+        border-radius: 6px;
+        background: var(--fill);
+        color: var(--label);
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .keycap-mod { background: transparent; border: 1px solid var(--separator); color: var(--label-secondary); font-weight: 500; }
+      .keycap-mark { color: var(--label-secondary); font-weight: 500; }
+      .keys-join { color: var(--label-tertiary); font-size: 11px; }
       .rule-note { color: var(--label-secondary); font-size: 12px; }
       .rule-hint { margin: 0 0 12px; line-height: 1.5; }
       .rule-flags { display: flex; gap: 8px; }

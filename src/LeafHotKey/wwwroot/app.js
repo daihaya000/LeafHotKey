@@ -266,6 +266,74 @@
     return input;
   }
 
+  // 送信内容をキーキャップ表示にする。表記は SendNotation と同じで、+ は修飾キー、
+  // 空白区切りは順に送る操作、↓ / ↑ は押しっぱなしと離す操作を表す。
+  function renderKeycaps(view, text) {
+    view.textContent = "";
+    String(text || "").split("\n").forEach((line) => {
+      const row = document.createElement("div");
+      row.className = "keys-line";
+      const parts = line.split(/\s+/).filter(Boolean);
+      if (!parts.length) {
+        row.classList.add("is-empty");
+        row.textContent = "—";
+      }
+      parts.forEach((part, index) => {
+        if (index > 0) {
+          const step = document.createElement("span");
+          step.className = "keys-step";
+          row.append(step);
+        }
+        appendKeyPart(row, part);
+      });
+      view.append(row);
+    });
+  }
+
+  function appendKeyPart(row, part) {
+    let body = part;
+    let mark = "";
+    if (body.endsWith("↓")) {
+      mark = "↓";
+      body = body.slice(0, -1);
+    } else if (body.endsWith("↑")) {
+      mark = "↑";
+      body = body.slice(0, -1);
+    }
+
+    // 「+」キーは単独なら +、修飾付きなら Ctrl++ と書く（SendNotation と同じ）。
+    const plusKey = body.endsWith("++");
+    const segments = (plusKey ? body.slice(0, -2) : body).split("+");
+    const key = plusKey ? "+" : segments.pop();
+    const modifiers = segments.filter((name) => name.trim());
+
+    modifiers.forEach((name) => {
+      row.append(keycap(name, "keycap-mod"));
+      row.append(keyJoin());
+    });
+    row.append(keycap(key || body || part, "", mark));
+  }
+
+  function keycap(text, className, mark) {
+    const chip = document.createElement("span");
+    chip.className = className ? `keycap ${className}` : "keycap";
+    chip.textContent = text;
+    if (mark) {
+      const arrow = document.createElement("span");
+      arrow.className = "keycap-mark";
+      arrow.textContent = mark;
+      chip.append(arrow);
+    }
+    return chip;
+  }
+
+  function keyJoin() {
+    const join = document.createElement("span");
+    join.className = "keys-join";
+    join.textContent = "+";
+    return join;
+  }
+
   function renderRuleDetail(detail, type, action) {
     detail.textContent = "";
     if (type === "hold") {
@@ -291,12 +359,28 @@
     sequence.placeholder = "送るキー（例: Ctrl+z / Esc。1行に1操作）";
     sequence.setAttribute("aria-label", "送るキー列");
     sequence.value = lines.join("\n");
+    // 通常はキーキャップで表示し、フォーカス中だけ生テキストを編集する。
+    const keys = document.createElement("div");
+    keys.className = "rule-keys";
+    const view = document.createElement("div");
+    view.className = "keys-view";
+    view.setAttribute("aria-hidden", "true");
+    sequence.addEventListener("focus", () => keys.classList.add("is-editing"));
+    sequence.addEventListener("blur", () => keys.classList.remove("is-editing"));
+    view.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      sequence.focus();
+    });
+    renderKeycaps(view, sequence.value);
+    keys.append(view, sequence);
+
     // 2行以上ある割り当て（Snd の第2引数）が隠れないよう高さを合わせる。
     sequence.addEventListener("input", () => {
       const needed = Math.min(6, Math.max(1, sequence.value.split("\n").length));
       if (sequence.rows !== needed) sequence.rows = needed;
+      renderKeycaps(view, sequence.value);
     });
-    detail.append(sequence);
+    detail.append(keys);
   }
 
   function renderRuleRow(rule, index) {
