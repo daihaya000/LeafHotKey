@@ -250,6 +250,10 @@ public static class WatcherSelfCheck
             Program.ProtectionNotice(true, LifecycleState.Stopped, StopCause.StartFailed) is not null,
             "復帰できない停止は通知する");
         Check(
+            "protection.notice.shutdownfailed",
+            Program.ProtectionNotice(false, LifecycleState.Stopped, StopCause.ShutdownFailed) is not null,
+            "退避に失敗した場合は保護が作動していなくても通知する");
+        Check(
             "protection.notice.manual",
             Program.ProtectionNotice(true, LifecycleState.Stopped, StopCause.ManualExit) is null
                 && Program.ProtectionNotice(false, LifecycleState.HostRunning, StopCause.None) is null,

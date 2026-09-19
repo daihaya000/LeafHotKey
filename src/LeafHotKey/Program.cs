@@ -317,6 +317,12 @@ public static class Program
             return wasActive ? null : "ゲームを検知しました。入力エンジンを停止しました。";
         }
 
+        // 退避できなかった場合は、保護が作動していなくても（入力変換が動いたままでも）知らせる。
+        if (cause == StopCause.ShutdownFailed)
+        {
+            return "ゲームを検知しましたが、入力エンジンを停止できませんでした。";
+        }
+
         if (!wasActive) return null;
 
         // 手動で止めた場合は利用者が自分の操作なので通知しない。
