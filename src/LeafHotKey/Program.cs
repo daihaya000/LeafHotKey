@@ -166,6 +166,17 @@ public static class Program
                 void OnStatusChanged() => tray.RefreshStatus();
                 supervisor.StatusChanged += OnStatusChanged;
 
+                // ゲーム保護の作動開始と終了をバルーンで知らせる。
+                var protectionWasActive = false;
+                void OnProtectionChanged()
+                {
+                    var notice = ProtectionNotice(protectionWasActive, supervisor.ProtectionState, supervisor.StopCause);
+                    if (notice is not null) tray.Notify(notice);
+                    protectionWasActive = supervisor.ProtectionState is LifecycleState.WaitingGameExit or LifecycleState.WaitingResumeDelay;
+                }
+
+                supervisor.ProtectionChanged += OnProtectionChanged;
+
                 // 起動バッチ経由の再起動では、戻ってきたことが分かるように通知する。
                 if (Environment.GetEnvironmentVariable("LEAFHOTKEY_RESTARTED") == "1")
                 {
@@ -176,6 +187,7 @@ public static class Program
                 tray.RestartRequested += requestRestart;
                 Application.Run(tray);
                 tray.RestartRequested -= requestRestart;
+                supervisor.ProtectionChanged -= OnProtectionChanged;
                 supervisor.StatusChanged -= OnStatusChanged;
             }
             finally
@@ -294,6 +306,24 @@ public static class Program
         }
 
         return local;
+    }
+
+    /// <summary>ゲーム保護の状態遷移から、トレイに出す通知を決める（出すものが無ければ null）。</summary>
+    internal static string? ProtectionNotice(bool wasActive, LifecycleState state, StopCause cause)
+    {
+        var active = state is LifecycleState.WaitingGameExit or LifecycleState.WaitingResumeDelay;
+        if (active)
+        {
+            return wasActive ? null : "ゲームを検知しました。入力エンジンを停止しました。";
+        }
+
+        if (!wasActive) return null;
+
+        // 手動で止めた場合は利用者が自分の操作なので通知しない。
+        if (cause == StopCause.ManualExit) return null;
+        return state == LifecycleState.HostRunning
+            ? "ゲーム終了を検知しました。入力エンジンを再開しました。"
+            : "ゲーム保護で入力エンジンを戻せませんでした。トレイから起動できます。";
     }
 
     private static int RestartHost()

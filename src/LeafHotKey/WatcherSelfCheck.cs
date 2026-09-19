@@ -232,6 +232,29 @@ public static class WatcherSelfCheck
             Directory.Delete(restartProbe, recursive: true);
         }
 
+        // ゲーム保護の開始・終了はトレイのバルーンで知らせる。
+        Check(
+            "protection.notice.start",
+            Program.ProtectionNotice(false, LifecycleState.WaitingGameExit, StopCause.None) == "ゲームを検知しました。入力エンジンを停止しました。",
+            "保護の作動開始で通知する");
+        Check(
+            "protection.notice.end",
+            Program.ProtectionNotice(true, LifecycleState.HostRunning, StopCause.None) == "ゲーム終了を検知しました。入力エンジンを再開しました。",
+            "保護の終了で通知する");
+        Check(
+            "protection.notice.once",
+            Program.ProtectionNotice(true, LifecycleState.WaitingResumeDelay, StopCause.None) is null,
+            "作動中は同じ通知を繰り返さない");
+        Check(
+            "protection.notice.failed",
+            Program.ProtectionNotice(true, LifecycleState.Stopped, StopCause.StartFailed) is not null,
+            "復帰できない停止は通知する");
+        Check(
+            "protection.notice.manual",
+            Program.ProtectionNotice(true, LifecycleState.Stopped, StopCause.ManualExit) is null
+                && Program.ProtectionNotice(false, LifecycleState.HostRunning, StopCause.None) is null,
+            "手動停止と保護外の遷移では通知しない");
+
         // 入力エンジンの場所は、発行物（同じフォルダー）と開発時のビルド出力の両方を解決する。
         var probeRoot = Path.Combine(Path.GetTempPath(), "leafhotkey-engine-probe-" + Guid.NewGuid().ToString("N"));
         try

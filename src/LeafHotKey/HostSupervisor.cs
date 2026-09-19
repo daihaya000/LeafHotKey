@@ -22,6 +22,9 @@ public sealed class HostSupervisor : IDisposable
     /// <summary>トレイ表示の更新が必要になったときに発火する。</summary>
     public event Action? StatusChanged;
 
+    /// <summary>ゲーム保護の状態が変わったときに発火する（トレイの通知に使う）。</summary>
+    public event Action? ProtectionChanged;
+
     public HostSupervisor(LifecycleController? controller, EngineControl engine, HostState state, EventLog log)
     {
         _controller = controller;
@@ -32,6 +35,12 @@ public sealed class HostSupervisor : IDisposable
 
     /// <summary>トレイに出す現在の状態。</summary>
     public string StatusText { get; private set; } = "起動しています";
+
+    /// <summary>ゲーム保護の監視状態。</summary>
+    public LifecycleState ProtectionState { get; private set; } = LifecycleState.HostRunning;
+
+    /// <summary>監視を停止した理由（停止していなければ None）。</summary>
+    public StopCause StopCause => _controller?.StopCause ?? StopCause.None;
 
     public void Start()
     {
@@ -76,6 +85,12 @@ public sealed class HostSupervisor : IDisposable
     /// <summary>入力エンジンの状態を取り込み、表示とログを更新する。</summary>
     private void Synchronize()
     {
+        if (_controller is { } protection && protection.State != ProtectionState)
+        {
+            ProtectionState = protection.State;
+            ProtectionChanged?.Invoke();
+        }
+
         if (_controller is { } controller && controller.LastMessage.Length > 0 && controller.LastMessage != _lastMessage)
         {
             _lastMessage = controller.LastMessage;
