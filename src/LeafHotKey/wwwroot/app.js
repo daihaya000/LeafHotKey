@@ -349,6 +349,7 @@
     window.addEventListener("keydown", onCaptureKeyDown, true);
     window.addEventListener("keyup", onCaptureKeyUp, true);
     window.addEventListener("mousedown", onCaptureMouseDown, true);
+    window.addEventListener("focusin", onCaptureFocusIn, true);
     window.addEventListener("wheel", onCaptureWheel, { capture: true, passive: false });
   }
 
@@ -361,6 +362,7 @@
     window.removeEventListener("keydown", onCaptureKeyDown, true);
     window.removeEventListener("keyup", onCaptureKeyUp, true);
     window.removeEventListener("mousedown", onCaptureMouseDown, true);
+    window.removeEventListener("focusin", onCaptureFocusIn, true);
     window.removeEventListener("wheel", onCaptureWheel, true);
   }
 
@@ -401,8 +403,19 @@
     writeCaptured(value);
   }
 
+  // 別の欄やボタンを操作したら録音を終える（録音が残ったまま保存などが動かないように）。
+  function onCaptureFocusIn(event) {
+    if (capturing && !capturing.wrap.contains(event.target)) disarmCapture();
+  }
+
   function onCaptureMouseDown(event) {
-    if (!capturing || capturing.kind === "modifiers" || event.button !== 1) return;
+    if (!capturing) return;
+    if (event.button !== 1) {
+      // 左クリックが録音欄の外なら、その操作を邪魔せず録音だけ終える。
+      if (!capturing.wrap.contains(event.target)) disarmCapture();
+      return;
+    }
+    if (capturing.kind === "modifiers") return;
     event.preventDefault();
     event.stopPropagation();
     writeCaptured("MButton");
@@ -649,6 +662,8 @@
   }
 
   function renderRuleList() {
+    // 行を作り直すと録音中の欄が消えるため、先に録音を終える。
+    disarmCapture();
     ruleDraft = ruleDraft.filter(Boolean);
     const query = (el("rule-filter").value || "").trim().toLocaleLowerCase();
     const list = el("rule-list");

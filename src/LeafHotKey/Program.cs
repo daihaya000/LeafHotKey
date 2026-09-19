@@ -323,7 +323,7 @@ public static class Program
         using var process = Process.Start(new ProcessStartInfo
         {
             FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-            Arguments = $"/d /c ping 127.0.0.1 -n 2 >nul & call \"{launcher}\"",
+            Arguments = $"/d /c ping 127.0.0.1 -n 2 >nul & call \"{launcher}\" restart",
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(launcher) ?? AppContext.BaseDirectory,
