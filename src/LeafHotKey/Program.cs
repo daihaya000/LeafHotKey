@@ -84,9 +84,6 @@ public static class Program
                 {
                     var snapshot = store.Load();
                     protection = snapshot.GameProtection;
-
-                    // 起動時にも AHK 用スクリプトを合わせておく（前回終了後の変更を取り込む）。
-                    PrepareAhkScript(snapshot.Backend, snapshot.Json);
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException or FormatException)
@@ -146,7 +143,6 @@ public static class Program
                     state,
                     server,
                     web?.Url,
-                    () => supervisor.BackendLabel,
                     statusText: () => supervisor.StatusText,
                     toggle: () =>
                     {
@@ -204,8 +200,6 @@ public static class Program
             webRoot: webRoot,
             onSaved: snapshot =>
             {
-                // AHK の生成スクリプトは本体側で書き出し、入力エンジンには再読込だけを伝える。
-                PrepareAhkScript(snapshot.Backend, snapshot.Json);
                 supervisor.UpdateSettings(snapshot.GameProtection);
 
                 var response = engine.Forward(ControlProtocol.Reload);
@@ -266,21 +260,6 @@ public static class Program
     {
         if (verb == ControlProtocol.Status) return ControlProtocol.Ok(ControlProtocol.StateStopped);
         return ControlProtocol.Error("ENGINE_STOPPED");
-    }
-
-    /// <summary>設定画面の内容を AHK 用スクリプトへ書き出す。</summary>
-    private static void PrepareAhkScript(BackendSettings settings, string json)
-    {
-        if (settings.Mode != InputBackend.Ahk || !settings.GenerateScript || json.Length == 0) return;
-
-        try
-        {
-            AhkScriptWriter.Write(json, AhkScriptWriter.PathFor(settings.AhkScript));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // 書き出せない場合は設定済みのスクリプトをそのまま使う。
-        }
     }
 
     /// <summary>

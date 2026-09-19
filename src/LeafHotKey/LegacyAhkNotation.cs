@@ -1,11 +1,10 @@
 namespace LeafHotKey;
 
 /// <summary>
-/// AHK の SendInput 文字列を解析する。
-/// 元の表記を保った台帳（defaults/settings.json）をそのまま解釈するため、
-/// 大文字小文字や {F5} と f5 の違いを潰さない。
+/// 旧 AHK 表記（^ + ! # と {}）の解析。設定ファイルの移行だけで使う。
+/// アプリの表記は <see cref="SendNotation"/> で、この表記は新しく使わない。
 /// </summary>
-public static class SendSequenceParser
+public static class LegacyAhkNotation
 {
     /// <summary>修飾キーとして「押しっぱなし」を表現できるキー名。</summary>
     private static readonly IReadOnlyDictionary<string, string> HoldableAliases =
@@ -71,10 +70,6 @@ public static class SendSequenceParser
 
         return tokens;
     }
-
-    /// <summary>複数の送信単位（AHK の Snd 第2引数）をまとめて解析する。</summary>
-    public static IReadOnlyList<IReadOnlyList<SendToken>> ParseAll(IEnumerable<string> sequences)
-        => sequences.Select(Parse).ToList();
 
     private static SendToken ParseBracedToken(string body, SendModifiers modifiers, string sequence)
     {

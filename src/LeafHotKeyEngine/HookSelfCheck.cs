@@ -48,7 +48,7 @@ public static class HookSelfCheck
                 {
                     Trigger = new HotkeyTrigger { Key = "f13" },
                     Kind = HotkeyActionKind.Send,
-                    Sequences = SendSequenceParser.ParseAll(new[] { "{Esc}" }),
+                    Sequences = SendNotation.ParseAll(new[] { "Esc" }),
                 },
                 new HotkeyRule
                 {
@@ -91,7 +91,7 @@ public static class HookSelfCheck
         IReadOnlyList<CapturedKey> Simulate(string sequence, int expected)
         {
             capture.Clear();
-            userSender.Send(SendSequenceParser.Parse(sequence));
+            userSender.Send(SendNotation.Parse(sequence));
             capture.WaitFor(expected, TimeSpan.FromSeconds(2));
             Thread.Sleep(120);
             var events = capture.Snapshot();
@@ -99,7 +99,7 @@ public static class HookSelfCheck
             return events;
         }
 
-        var converted = Simulate("{F13}", 2);
+        var converted = Simulate("F13", 2);
         Check(
             "hook.suppress",
             converted.All(e => Normalize(e.VirtualKey) != VkF13),
@@ -109,13 +109,13 @@ public static class HookSelfCheck
             converted.Count(e => e.VirtualKey == VkEscape) == 2,
             "f13 が Esc の押下・解放へ変換される");
 
-        var holdDown = Simulate("{F14 Down}", 1);
+        var holdDown = Simulate("F14↓", 1);
         Check(
             "hook.hold.down",
             holdDown.Any(e => Normalize(e.VirtualKey) == VkControl && !e.KeyUp),
             "f14 押下で Ctrl が押される");
 
-        var holdUp = Simulate("{F14 Up}", 1);
+        var holdUp = Simulate("F14↑", 1);
         Check(
             "hook.hold.up",
             holdUp.Any(e => Normalize(e.VirtualKey) == VkControl && e.KeyUp),
@@ -123,21 +123,21 @@ public static class HookSelfCheck
 
         // 停止中は変換しない。
         engine.Enabled = false;
-        var disabled = Simulate("{F13}", 2);
+        var disabled = Simulate("F13", 2);
         Check(
             "hook.disabled",
             disabled.Count(e => Normalize(e.VirtualKey) == VkF13) == 2 && disabled.All(e => e.VirtualKey != VkEscape),
             "一時停止中は元のキーをそのまま通す");
 
         engine.Enabled = true;
-        var reenabled = Simulate("{F13}", 2);
+        var reenabled = Simulate("F13", 2);
         Check(
             "hook.reenabled",
             reenabled.Count(e => e.VirtualKey == VkEscape) == 2,
             "再開すると再び変換する");
 
         // 停止時にフックを解除し、保持キーを解放する。
-        Simulate("{F14 Down}", 1);
+        Simulate("F14↓", 1);
         capture.Clear();
         engine.Stop();
         Thread.Sleep(150);
@@ -152,14 +152,14 @@ public static class HookSelfCheck
         var restarted = engine.Start();
         engine.Enabled = true;
         Check("engine.restart.installed", restarted && engine.Installed, "停止後も再開できる");
-        var afterRestart = Simulate("{F13}", 2);
+        var afterRestart = Simulate("F13", 2);
         Check(
             "engine.restart.convert",
             afterRestart.Count(e => e.VirtualKey == VkEscape) == 2,
             "再開後も変換が有効になる");
         engine.Stop();
 
-        var afterStopEvents = Simulate("{F13}", 2);
+        var afterStopEvents = Simulate("F13", 2);
         Check(
             "engine.stop.passthrough",
             afterStopEvents.Count(e => Normalize(e.VirtualKey) == VkF13) == 2,

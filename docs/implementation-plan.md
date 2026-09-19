@@ -41,7 +41,6 @@ LeafHotKey.exe（本体）
 
 LeafHotKeyEngine.exe（入力エンジン）
 ├─ キーボード／マウスフックと入力変換
-├─ AutoHotkeyバックエンド
 └─ 制御チャネル（STATUS / PAUSE / RESUME / SHUTDOWN / RELOAD）
 ```
 

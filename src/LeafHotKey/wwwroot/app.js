@@ -288,7 +288,7 @@
     sequence.rows = Math.min(6, Math.max(1, lines.length || 1));
     sequence.spellcheck = false;
     sequence.dataset.ruleSequence = "";
-    sequence.placeholder = "送るキー（例: ^z / {Esc}。1行に1操作）";
+    sequence.placeholder = "送るキー（例: Ctrl+z / Esc。1行に1操作）";
     sequence.setAttribute("aria-label", "送るキー列");
     sequence.value = lines.join("\n");
     // 2行以上ある割り当て（Snd の第2引数）が隠れないよう高さを合わせる。
@@ -305,8 +305,6 @@
     const row = document.createElement("div");
     row.className = "rule-row";
     row.dataset.ruleIndex = String(index);
-    // blind（AHK の {Blind}）は編集対象ではないが、保存時に消えないよう保持する。
-    row.dataset.ruleBlind = action.blind === false ? "false" : "true";
 
     const prefix = makeRuleInput("rulePrefix", "前置キー", trigger.prefix, "—", "rule-prefix");
     if ((trigger.prefix || "").trim()) prefix.classList.add("is-set");
@@ -335,8 +333,8 @@
 
     const flags = document.createElement("div");
     flags.className = "rule-flags";
-    [["ruleAnyModifier", "*", "修飾キーの有無を問わない（AHK の *）", trigger.anyModifier],
-     ["rulePassThrough", "~", "元の入力を通す（AHK の ~）", trigger.passThroughNative]].forEach(([datasetKey, mark, title, checked]) => {
+    [["ruleAnyModifier", "修飾無視", "修飾キーの有無を問わずに発火する", trigger.anyModifier],
+     ["rulePassThrough", "素通し", "元のキーもそのままアプリへ渡す", trigger.passThroughNative]].forEach(([datasetKey, mark, title, checked]) => {
       const field = document.createElement("label");
       field.className = "rule-flag";
       field.title = title;
@@ -391,7 +389,6 @@
         sequence: detailValue("rule-sequence").split("\n"),
         modifier: detailValue("rule-modifier"),
         releaseOn: detailValue("rule-release-on"),
-        blind: row.dataset.ruleBlind !== "false",
       },
     };
   }
@@ -455,7 +452,6 @@
       if (type === "hold") {
         action.modifier = (rule.action.modifier || "").trim();
         action.releaseOn = (rule.action.releaseOn || "").trim();
-        action.blind = rule.action.blind !== false;
         if (!action.modifier || !action.releaseOn) throw new Error(`${key} の維持するキーと解除するキーを入力してください。`);
       }
 
@@ -722,14 +718,9 @@
   }
 
   function renderGeneralSettings() {
-    if (!settings) return;    const input = settings.input || {};
+    if (!settings) return;
+    const input = settings.input || {};
     setSwitch(el("ime-disable"), input.imeDisableBeforeSend !== false);
-
-    const backend = settings.backend || {};
-    el("backend-mode").value = backend.mode === "ahk" ? "ahk" : "builtin";
-    el("backend-script").value = backend.ahkScript || "";
-    el("backend-executable").value = backend.ahkExecutable || "";
-    setSwitch(el("backend-generate"), backend.generateScript !== false);
     el("settings-revision").textContent = revision || "-";
   }
 
@@ -750,13 +741,6 @@
     if (!settings.input) settings.input = {};
     const input = settings.input;
     input.imeDisableBeforeSend = el("ime-disable").getAttribute("aria-checked") === "true";
-
-    if (!settings.backend) settings.backend = {};
-    const backend = settings.backend;
-    backend.mode = el("backend-mode").value === "ahk" ? "ahk" : "builtin";
-    backend.ahkScript = el("backend-script").value.trim();
-    backend.ahkExecutable = el("backend-executable").value.trim();
-    backend.generateScript = el("backend-generate").getAttribute("aria-checked") === "true";
 
     if (!settings.gameProtection) settings.gameProtection = {};
     const protection = settings.gameProtection;
@@ -833,6 +817,8 @@
       settings = JSON.parse(result.payload.json);
       revision = result.payload.revision;
       editingProfileIndex = null;
+      // 廃止した backend セクションは読み捨てる（保存時に書き戻さない）。
+      delete settings.backend;
       renderAll();
       showAlert("");
       setSaveState("保存済み", "ok");
@@ -886,30 +872,6 @@
     el("connection-text").textContent = result.payload.engineInstalled === false ? "ホスト接続済み・フック未設置" : "Windowsホスト接続済み";
     el("status-foreground").textContent = "自動判定";
     el("status-profile").textContent = result.payload.activeProfile || "対象外";
-
-    const backendState = el("backend-state");
-    if (backendState) {
-      const ahk = result.payload.backend === "ahk";
-      backendState.className = "badge" + (running ? " badge-success" : "");
-      backendState.textContent = ahk
-        ? `AutoHotkey·${result.payload.backendStatus || "-"}`
-        : `内蔵エンジン·${result.payload.engineInstalled === false ? "未設置" : "動作中"}`;
-    }
-
-    // AHK 使用中は、この画面のプロファイルが使われないことを明示する。
-    const backendNotice = el("profile-backend-notice");
-    if (backendNotice) backendNotice.hidden = result.payload.backend !== "ahk";
-
-    const backendDetail = el("backend-detail");
-    if (backendDetail) {
-      const note = result.payload.backendNote || "";
-      backendDetail.textContent = result.payload.backend === "ahk"
-        ? `PID ${result.payload.backendPid ?? "-"} · 再起動 ${result.payload.backendRestarts ?? 0} 回${note ? " · " + note : ""}`
-        : "内蔵フックを設置しています。";
-    }
-
-    const generated = el("backend-generated");
-    if (generated) generated.textContent = result.payload.backendGenerated || "（書き出しなし）";
 
     const fact = el("runtime-copy");
     if (result.payload.engineInstalled === false) fact.textContent = "入力フックを設置できていません。";
@@ -981,18 +943,17 @@
     updateThemeIcon();
   }));
 
-  ["protection-enabled", "ime-disable", "backend-generate"].forEach((id) => {
+  ["protection-enabled", "ime-disable"].forEach((id) => {
     el(id).addEventListener("click", () => {
       const button = el(id);
       setSwitch(button, button.getAttribute("aria-checked") !== "true");
       syncSettingsFromForms();
     });
   });
-  ["poll-interval", "resume-delay", "backend-script", "backend-executable"].forEach((id) => {
+  ["poll-interval", "resume-delay"].forEach((id) => {
     el(id).addEventListener("input", syncSettingsFromForms);
     el(id).addEventListener("change", syncSettingsFromForms);
   });
-  el("backend-mode").addEventListener("change", syncSettingsFromForms);
   el("profile-enabled").addEventListener("click", () => {
     const button = el("profile-enabled");
     setSwitch(button, button.getAttribute("aria-checked") !== "true");

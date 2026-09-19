@@ -28,12 +28,12 @@
     <Compile Include="..\LeafHotKey\SettingsStore.cs" Link="Shared\SettingsStore.cs" />
     <Compile Include="..\LeafHotKey\HotkeyProfile.cs" Link="Shared\HotkeyProfile.cs" />
     <Compile Include="..\LeafHotKey\SendToken.cs" Link="Shared\SendToken.cs" />
-    <Compile Include="..\LeafHotKey\SendSequenceParser.cs" Link="Shared\SendSequenceParser.cs" />
+    <Compile Include="..\LeafHotKey\SendNotation.cs" Link="Shared\SendNotation.cs" />
+    <Compile Include="..\LeafHotKey\LegacyAhkNotation.cs" Link="Shared\LegacyAhkNotation.cs" />
+    <Compile Include="..\LeafHotKey\SettingsMigration.cs" Link="Shared\SettingsMigration.cs" />
     <Compile Include="..\LeafHotKey\KeyNames.cs" Link="Shared\KeyNames.cs" />
     <Compile Include="..\LeafHotKey\GameProtectionSettings.cs" Link="Shared\GameProtectionSettings.cs" />
-    <Compile Include="..\LeafHotKey\BackendSettings.cs" Link="Shared\BackendSettings.cs" />
     <Compile Include="..\LeafHotKey\EventLog.cs" Link="Shared\EventLog.cs" />
-    <Compile Include="..\LeafHotKey\AhkScriptWriter.cs" Link="Shared\AhkScriptWriter.cs" />
   </ItemGroup>
 
 </Project>

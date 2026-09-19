@@ -54,9 +54,10 @@ public static class SettingsSelfCheck
             Check("update.prepared", updated != first.Json, "更新用の内容を用意できる");
             Check("input.ime.default", first.ImeDisableBeforeSend, "既定では送信前に IME を無効化する");
             Check(
-                "backend.default",
-                first.Backend.Mode == InputBackend.Builtin && first.Backend.AhkScript.Length > 0,
-                $"既定のバックエンドは内蔵エンジン（AHKスクリプト: {first.Backend.AhkScript}）");
+                "schema.current",
+                first.Json.Contains($"\"schemaVersion\": {SettingsMigration.CurrentSchemaVersion}", StringComparison.Ordinal) &&
+                !first.Json.Contains("\"backend\"", StringComparison.Ordinal),
+                $"既定設定は現行形式（schemaVersion {SettingsMigration.CurrentSchemaVersion}）で、廃止した backend を持たない");
 
             var saved = store.Save(updated, first.Revision);
             Check("save.ok", saved.Success, $"正しい内容を保存できる（{saved.Message}）");
@@ -93,9 +94,9 @@ public static class SettingsSelfCheck
             var invalidAction = store.Save(unknownAction, store.Load().Revision);
             Check("invalid.action", invalidAction.Status == SaveStatus.Invalid, "未知の action.type を拒否する");
 
-            var unknownKey = afterSave.Json.Replace("\"sequence\": [\"{Right}\"]", "\"sequence\": [\"{NoSuchKey}\"]", StringComparison.Ordinal);
+            var unknownKey = afterSave.Json.Replace("\"sequence\": [\"Right\"]", "\"sequence\": [\"Ctrl+\"]", StringComparison.Ordinal);
             var invalidKey = store.Save(unknownKey, store.Load().Revision);
-            Check("invalid.key", invalidKey.Status == SaveStatus.Invalid, "未知のキー名を拒否する");
+            Check("invalid.key", invalidKey.Status == SaveStatus.Invalid, "解釈できない送信内容を拒否する");
 
             Check("invalid.unchanged", store.Load().GameProtection.PollIntervalMs == 750, "拒否された保存は反映されない");
 
@@ -168,6 +169,36 @@ public static class SettingsSelfCheck
                 "apppaths.text.kept",
                 mergeJapanese.Success && File.ReadAllText(settingsPath, encoding).Contains("エクスプローラー", StringComparison.Ordinal),
                 "追記しても日本語の表記をそのまま残す");
+
+            // 旧 AHK 時代の設定ファイルを読み込める（表記の変換と backend の削除）。
+            var legacyPath = Path.Combine(workDirectory, "legacy.json");
+            File.WriteAllText(legacyPath, LegacySettings, encoding);
+            var legacyStore = new SettingsStore(legacyPath, defaults);
+            var migrated = legacyStore.Load();
+
+            Check(
+                "migrate.notation",
+                migrated.Json.Contains("\"Ctrl+Alt+g\"", StringComparison.Ordinal) &&
+                migrated.Json.Contains("\"Esc\"", StringComparison.Ordinal) &&
+                !migrated.Json.Contains("^!g", StringComparison.Ordinal),
+                "旧 AHK 表記を現行表記へ移行する");
+            Check("migrate.backend", !migrated.Json.Contains("\"backend\"", StringComparison.Ordinal), "廃止した backend セクションを外す");
+            Check(
+                "migrate.version",
+                migrated.Json.Contains($"\"schemaVersion\": {SettingsMigration.CurrentSchemaVersion}", StringComparison.Ordinal),
+                $"schemaVersion を {SettingsMigration.CurrentSchemaVersion} へ上げる");
+            Check("migrate.written", File.ReadAllText(legacyPath, encoding) == migrated.Json, "移行した内容を正本へ書き戻す");
+            Check("migrate.idempotent", SettingsMigration.Apply(migrated.Json) == migrated.Json, "移行を繰り返しても内容が変わらない");
+
+            var migratedRule = migrated.Profiles.Single().Rules.Single();
+            Check(
+                "migrate.tokens",
+                migratedRule.Sequences.Count == 2 &&
+                migratedRule.Sequences[0].Count == 1 &&
+                migratedRule.Sequences[0][0].Character == 'g' &&
+                migratedRule.Sequences[0][0].Modifiers == (SendModifiers.Ctrl | SendModifiers.Alt) &&
+                migratedRule.Sequences[1][0].KeyName == "Esc",
+                "移行後も同じキーを送る");
         }
         finally
         {
@@ -177,6 +208,33 @@ public static class SettingsSelfCheck
         File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);
         return failures == 0 ? 0 : 1;
     }
+
+    /// <summary>AHK 時代の形式（schemaVersion 1・backend あり・^!g などの表記）の設定。</summary>
+    private const string LegacySettings = """
+    {
+      "schemaVersion": 1,
+      "backend": { "mode": "ahk", "ahkScript": "C:/tmp/MySet.ahk", "ahkExecutable": "", "generateScript": true },
+      "input": { "imeDisableBeforeSend": true },
+      "gameProtection": {
+        "enabled": false,
+        "pollIntervalMs": 1000,
+        "resumeDelayMs": 1000,
+        "stopTriggerProcessNames": [],
+        "resumeProcessNames": []
+      },
+      "profiles": [
+        {
+          "id": "legacy",
+          "name": "旧形式",
+          "enabled": true,
+          "processNames": ["legacy.exe"],
+          "rules": [
+            { "trigger": { "key": "f13" }, "action": { "type": "send", "sequence": ["^!g", "{Esc}"] } }
+          ]
+        }
+      ]
+    }
+    """;
 
     private static string? FindDefaultSettings()
     {

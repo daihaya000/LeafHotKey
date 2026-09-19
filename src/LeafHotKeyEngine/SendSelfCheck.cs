@@ -36,7 +36,7 @@ public static class SendSelfCheck
         IReadOnlyList<CapturedKey> SendAndCapture(string sequence, int expectedEvents)
         {
             capture.Clear();
-            var tokens = SendSequenceParser.Parse(sequence);
+            var tokens = SendNotation.Parse(sequence);
             var result = sender.Send(tokens, layout);
             if (result.Unresolved.Count > 0)
             {
@@ -71,7 +71,7 @@ public static class SendSelfCheck
         const ushort VkB = 0x42;
         const ushort VkK = 0x4B;
 
-        var ctrlZ = SendAndCapture("^z", 4);
+        var ctrlZ = SendAndCapture("Ctrl+z", 4);
         Check(
             "send.ctrl-z",
             ctrlZ.Count == 4 &&
@@ -79,17 +79,17 @@ public static class SendSelfCheck
             Is(ctrlZ[1], VkZ, false) &&
             Is(ctrlZ[2], VkZ, true) &&
             Is(ctrlZ[3], VkControl, true),
-            "^z は Ctrl押下→z押下→z解放→Ctrl解放");
+            "Ctrl+z は Ctrl押下→z押下→z解放→Ctrl解放");
 
         Check("send.injected", ctrlZ.All(e => e.Injected), "自分が注入したイベントとして識別できる");
 
-        var escape = SendAndCapture("{Esc}", 2);
+        var escape = SendAndCapture("Esc", 2);
         Check(
             "send.named",
             escape.Count == 2 && escape.All(e => e.VirtualKey == VkEscape) && !escape[0].KeyUp && escape[1].KeyUp,
-            "{Esc} は Esc の押下と解放");
+            "Esc は Esc の押下と解放");
 
-        var ctrlShiftTab = SendAndCapture("^+{Tab}", 6);
+        var ctrlShiftTab = SendAndCapture("Ctrl+Shift+Tab", 6);
         Check(
             "send.two-modifiers",
             ctrlShiftTab.Count == 6 &&
@@ -98,21 +98,21 @@ public static class SendSelfCheck
             Is(ctrlShiftTab[3], VkTab, true) &&
             Is(ctrlShiftTab[4], VkShift, true) &&
             Is(ctrlShiftTab[5], VkControl, true),
-            "^+{Tab} は修飾キーを対称に押して離す");
+            "Ctrl+Shift+Tab は修飾キーを対称に押して離す");
 
-        var altF12 = SendAndCapture("!{f12}", 4);
+        var altF12 = SendAndCapture("Alt+F12", 4);
         Check(
             "send.function-key",
             altF12.Count == 4 && Is(altF12[0], VkAlt, false) && Is(altF12[1], VkF12, false),
-            "!{f12} は Alt+F12");
+            "Alt+F12 は Alt+F12");
 
-        var shiftB = SendAndCapture("+B", 4);
+        var shiftB = SendAndCapture("Shift+B", 4);
         Check(
             "send.uppercase",
             shiftB.Count == 4 && Is(shiftB[0], VkShift, false) && Is(shiftB[1], VkB, false),
-            "+B は Shift+B（大文字は配列解決で Shift が付く）");
+            "Shift+B は Shift+B（大文字は配列解決で Shift が付く）");
 
-        var down = SendAndCapture("{ShiftDown}{AltDown}k", 4);
+        var down = SendAndCapture("Shift↓ Alt↓ k", 4);
         Check(
             "send.hold-down",
             down.Count == 4 &&
@@ -120,13 +120,13 @@ public static class SendSelfCheck
             Is(down[1], VkAlt, false) &&
             Is(down[2], VkK, false) &&
             Is(down[3], VkK, true),
-            "{ShiftDown}{AltDown}k は修飾キーを押したままにする");
+            "Shift↓ Alt↓ k は修飾キーを押したままにする");
 
-        var up = SendAndCapture("{ShiftUp}{AltUp}", 2);
+        var up = SendAndCapture("Shift↑ Alt↑", 2);
         Check(
             "send.hold-up",
             up.Count == 2 && up.All(e => e.KeyUp) && Is(up[0], VkShift, true) && Is(up[1], VkAlt, true),
-            "{ShiftUp}{AltUp} は解放のみ");
+            "Shift↑ Alt↑ は解放のみ");
 
         // JIS 配列を含む現在の配列で記号が解決できること。
         var colonScan = NativeMethods.VkKeyScanEx(':', layout);

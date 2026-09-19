@@ -21,9 +21,6 @@ public sealed class SettingsSnapshot
     /// <summary>送信前に IME をオフにするか（元 AHK の IME_SET(0)）。</summary>
     public bool ImeDisableBeforeSend { get; init; } = true;
 
-    /// <summary>入力変換を担当するバックエンド。</summary>
-    public required BackendSettings Backend { get; init; }
-
     /// <summary>
     /// 検知した実行ファイルのフルパス（実行ファイル名 → フルパス）。
     /// アイコン表示のためだけに使う。アプリが起動していなくてもアイコンを出せるように残す。
@@ -103,12 +100,19 @@ public sealed class SettingsStore
         {
             EnsureExists();
 
-            if (TryParse(ReadText(SettingsPath)) is { } current) return current;
+            var text = ReadText(SettingsPath);
+            var migrated = SettingsMigration.Apply(text);
+            if (TryParse(migrated) is { } current)
+            {
+                // 旧形式から移行した内容は正本へ書き戻す（直前の内容はバックアップに残る）。
+                if (!string.Equals(migrated, text, StringComparison.Ordinal)) WriteAtomic(migrated);
+                return current;
+            }
 
             // 壊れた内容でも起動できるよう、バックアップ → 既定設定の順で復旧する。
             // 復旧内容は正本へ書き戻し、壊れていた内容はバックアップ側へ退避する。
-            var recovered = TryParse(File.Exists(BackupPath) ? ReadText(BackupPath) : string.Empty)
-                ?? TryParse(ReadText(_defaultsPath));
+            var recovered = TryParse(File.Exists(BackupPath) ? SettingsMigration.Apply(ReadText(BackupPath)) : string.Empty)
+                ?? TryParse(SettingsMigration.Apply(ReadText(_defaultsPath)));
             if (recovered is null) throw new InvalidDataException($"設定を読み込めません: {SettingsPath}");
 
             WriteAtomic(recovered.Json);
@@ -137,6 +141,9 @@ public sealed class SettingsStore
         lock (_gate)
         {
             EnsureExists();
+
+            // 旧形式で送られても、保存するのは現行形式に揃える。
+            json = SettingsMigration.Apply(json);
 
             var currentJson = ReadText(SettingsPath);
             var currentRevision = RevisionOf(currentJson);
@@ -259,7 +266,6 @@ public sealed class SettingsStore
                 GameProtection = gameProtection,
                 Profiles = profiles,
                 ImeDisableBeforeSend = ReadImeDisable(document.RootElement),
-                Backend = BackendSettings.Read(document.RootElement),
                 AppPaths = ReadAppPaths(document.RootElement),
             };
         }

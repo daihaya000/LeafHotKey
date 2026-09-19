@@ -17,6 +17,7 @@ public sealed class HostSupervisor : IDisposable
 
     private Thread? _thread;
     private string _lastMessage = string.Empty;
+    private string _lastEngineLabel = string.Empty;
 
     /// <summary>トレイ表示の更新が必要になったときに発火する。</summary>
     public event Action? StatusChanged;
@@ -31,12 +32,6 @@ public sealed class HostSupervisor : IDisposable
 
     /// <summary>トレイに出す現在の状態。</summary>
     public string StatusText { get; private set; } = "起動しています";
-
-    /// <summary>バックエンドの表示名。</summary>
-    public string BackendLabel { get; private set; } = "-";
-
-    /// <summary>AutoHotkey バックエンドで動作しているか。</summary>
-    private bool IsAhkBackend { get; set; }
 
     public void Start()
     {
@@ -91,14 +86,10 @@ public sealed class HostSupervisor : IDisposable
         if (described.State == "running") _state.Resume();
         else if (described.State == "paused") _state.Pause();
 
-        IsAhkBackend = described.Backend == "ahk";
-        BackendLabel = IsAhkBackend
-            ? $"AutoHotkey（{described.BackendStatus}）"
-            : described.State == "stopped" ? "-" : "内蔵エンジン";
-
         var text = BuildStatusText(described.State, controller: _controller);
-        if (text == StatusText && BackendLabel == described.Label) return;
+        if (text == StatusText && described.Label == _lastEngineLabel) return;
 
+        _lastEngineLabel = described.Label;
         StatusText = text;
         _log.Add("状態: " + text);
         StatusChanged?.Invoke();
@@ -130,21 +121,17 @@ public sealed class HostSupervisor : IDisposable
         };
     }
 
-    private static (string State, string Backend, string BackendStatus, string Label) Describe(string json)
+    private static (string State, string Label) Describe(string json)
     {
         try
         {
             using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            var state = Read(root, "state", "unknown");
-            var backend = Read(root, "backend", "builtin");
-            var status = Read(root, "backendStatus", "-");
-            return (state, backend, status, state + "/" + backend + "/" + status);
+            var state = Read(document.RootElement, "state", "unknown");
+            return (state, state);
         }
         catch (JsonException)
         {
-            return ("unknown", "builtin", "-", "unknown");
+            return ("unknown", "unknown");
         }
     }
 

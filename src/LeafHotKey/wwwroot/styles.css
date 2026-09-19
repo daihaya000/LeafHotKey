@@ -481,10 +481,10 @@
       .rule-table-head,
       .rule-row {
         display: grid;
-        grid-template-columns: 104px 96px 108px 128px minmax(180px, 1fr) 76px 32px;
+        grid-template-columns: 104px 96px 108px 128px minmax(180px, 1fr) 132px 32px;
         gap: 8px;
         align-items: center;
-        min-width: 760px;
+        min-width: 820px;
         padding: 6px 12px;
       }
       .rule-table-head {
@@ -523,8 +523,9 @@
       .rule-detail { display: flex; gap: 6px; min-width: 0; }
       .rule-detail textarea { min-height: 30px; resize: vertical; }
       .rule-note { color: var(--label-secondary); font-size: 12px; }
+      .rule-hint { margin: 0 0 12px; line-height: 1.5; }
       .rule-flags { display: flex; gap: 8px; }
-      .rule-flag { display: inline-flex; align-items: center; gap: 3px; color: var(--label-secondary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; cursor: pointer; }
+      .rule-flag { display: inline-flex; align-items: center; gap: 3px; color: var(--label-secondary); font-size: 11px; cursor: pointer; white-space: nowrap; }
       .rule-flag input[type="checkbox"] { width: 14px; min-height: 0; height: 14px; padding: 0; border: 0; background: none; accent-color: var(--accent); }
       .rule-remove {
         width: 28px;

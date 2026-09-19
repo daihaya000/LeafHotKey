@@ -123,11 +123,8 @@ public static class ProfileSelfCheck
         var hold = explorer.Rules.Single(r => r.Trigger.Key == "f14");
         Check(
             "parse.hold",
-            hold.Kind == HotkeyActionKind.Hold && hold.HoldModifier == "Ctrl" && hold.ReleaseOn == "f14" && hold.Blind,
+            hold.Kind == HotkeyActionKind.Hold && hold.HoldModifier == "Ctrl" && hold.ReleaseOn == "f14",
             "Hold(\"Ctrl\", \"f14\") を保持動作として読む");
-
-        var blindOff = clipStudio.Rules.Single(r => r.Trigger.Prefix == "MButton" && r.Trigger.Key == "f13");
-        Check("parse.hold.blind", blindOff.Kind == HotkeyActionKind.Hold && !blindOff.Blind, "Hold(..., 0) は {Blind} なし");
 
         var passthroughRule = clipStudio.Rules.Single(r => r.Kind == HotkeyActionKind.Passthrough && r.Trigger.Key == "MButton");
         Check(
@@ -135,10 +132,18 @@ public static class ProfileSelfCheck
             passthroughRule.Trigger.AnyModifier && passthroughRule.Trigger.PassThroughNative,
             "*~MButton は修飾無視かつ元入力を通す");
 
-        // 解析器そのものの異常系。
-        Check("parser.unknown-key", Throws(() => SendSequenceParser.Parse("{NoSuchKey}")), "未知のキー名を拒否する");
-        Check("parser.unclosed", Throws(() => SendSequenceParser.Parse("{Esc")), "閉じ括弧なしを拒否する");
-        Check("parser.dangling-modifier", Throws(() => SendSequenceParser.Parse("^")), "対象キーのない修飾キーを拒否する");
+        // 現行表記の解析器そのものの異常系。
+        Check("parser.unknown-modifier", Throws(() => SendNotation.Parse("Hyper+g")), "未知の修飾キーを拒否する");
+        Check("parser.dangling-modifier", Throws(() => SendNotation.Parse("Ctrl+")), "対象キーのない修飾キーを拒否する");
+        Check("parser.empty", Throws(() => SendNotation.Parse("  ")), "空の内容を拒否する");
+        Check("parser.char-hold", Throws(() => SendNotation.Parse("g↓")), "文字は押しっぱなしにできない");
+        Check("parser.space-separated", SendNotation.Parse("f 5").Count == 2, "空白区切りは別の文字として扱う");
+        Check("parser.plus", SendNotation.Parse("Ctrl++")[0].Character == '+' && SendNotation.Parse("+")[0].Character == '+', "「+」キーを修飾と区別できる");
+
+        // 旧 AHK 表記の解析（設定ファイルの移行専用）。
+        Check("legacy.braced", LegacyAhkNotation.Parse("{Esc}")[0].KeyName == "Esc", "旧表記の {Esc} を読み替えられる");
+        Check("legacy.unclosed", Throws(() => LegacyAhkNotation.Parse("{Esc")), "旧表記の閉じ括弧なしを拒否する");
+        Check("legacy.dangling-modifier", Throws(() => LegacyAhkNotation.Parse("^")), "旧表記の対象キーのない修飾キーを拒否する");
 
         File.AppendAllText(path, $"failures={failures}{Environment.NewLine}", encoding);
         return failures == 0 ? 0 : 1;

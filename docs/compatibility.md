@@ -13,17 +13,22 @@
 | `Sleep,2` | `MySet.ahk:40,52` | なし | `SendMessageTimeout`で同期的にIMEを切るため待機不要。設定項目は持たない |
 | `Snd(keys, then)` | `MySet.ahk:38-44` | `action.type = "send"` | `sequence` の各要素を別々の送信として扱う |
 | `Hold(mod, trigger, blind)` | `MySet.ahk:49-56` | `action.type = "hold"` | `modifier` を押し、`releaseOn` を離すまで保持 |
-| `{Blind}` | `MySet.ahk:50` | なし | 本実装は常に他の修飾キーを維持する（`blind: true` 相当）。`action.blind` は互換のため読むだけで動作は変えない |
+| `{Blind}` | `MySet.ahk:50` | なし | 本実装は常に他の修飾キーを維持する（旧 `action.blind` は廃止し、保持の挙動は変えない） |
 | `*~key::return` | 各プロファイル | `action.type = "passthrough"` | 前置キーに使いつつ、元の入力を通す |
 | `~` 付き前置キーの単体動作 | 各プロファイル | 前置キーの `passThroughNative` | AHK 1.1.14+ と同様、離上ではなく**押下時**に発火する |
 | `GroupAdd, UEGroup` | `MySet.ahk:58-59` | `unreal.processNames` | UE4Editor.exe と UnrealEditor.exe |
 
 ### 送信表記の扱い
 
-- `sequence` の要素は **AHKの送信文字列をそのまま保持** する。実装側で解釈する。
-- `^` = Ctrl、`+` = Shift、`!` = Alt。
-- `"f5"` と `"{F5}"`、`"{f9}"` と `"{F9}"`、`"+B"` と `"+b"` を**同一視しない**。元の表記を維持する。
-- `Snd("{Esc}", "^z")` は 1要素ではなく `["{Esc}", "^z"]` の2回送信。
+- `sequence` の要素は**アプリ独自の表記**で保持する（AHK の記号は使わない）。
+  - 修飾は `Ctrl+` `Shift+` `Alt+` `Win+`（例: `Ctrl+Shift+g`）。
+  - 名前付きキーはそのまま（例: `Esc`、`Tab`、`F9`、`PgDn`）。
+  - 文字は 1 文字ずつ。続けて送る場合は空白で区切る（例: `f 5`）。
+  - 押しっぱなしと解放は `↓` / `↑`（例: `Alt↓ g`、`Alt↑`）。
+- 旧 AHK 表記（`^z`、`{Esc}`、`{AltDown}` など）は読み込み時に上記へ自動で移行する（`SettingsMigration`。移行専用の解釈は `LegacyAhkNotation`）。
+- 旧表記の意味はそのまま保つ: `^` = Ctrl、`+` = Shift、`!` = Alt、`{XDown}` = `X↓`。
+- `"f5"`（文字 f と 5）は `f 5`、`{F5}`（F5 キー）は `F5` として区別を維持する。
+- 送信単位の分割（旧 `Snd("{Esc}", "^z")` = `["Esc", "Ctrl+z"]` の2回送信）は変わらない。
 
 ### トリガ表記の扱い
 
@@ -96,10 +101,9 @@
 | `--check-send <report>` | SendInput の実送信と配列解決 | 13 PASS |
 | `--check-engine <report> [settings]` | 判定、前置キー、保持キーの解放、IME 設定 | 43 PASS |
 | `--check-hook <report>` | 実フック経由の変換・抑止・停止時解放 | 14 PASS |
-| `--check-backend <report>` | AHK バックエンドの解決、再起動判断、スクリプト追従 | 30 PASS |
 | `--check-coverage <report> [settings]` | 全 send / hold ルールを発火させて台帳と照合 | 243 件、不一致 0 |
-| `LeafHotKey.exe --check-profiles <report> [settings]` | 台帳の読込みと送信文字列の解析 | 25 PASS（251ルール） |
-| `--check-settings <report> [settings]` | 保存、競合・不正拒否、破損からの復旧、検知した実行ファイルパスの追記・更新 | 38 PASS |
+| `LeafHotKey.exe --check-profiles <report> [settings]` | 台帳の読込みと送信表記の解析 | 30 PASS（251ルール） |
+| `--check-settings <report> [settings]` | 保存、競合・不正拒否、破損からの復旧、旧形式の移行、検知した実行ファイルパスの追記・更新 | 44 PASS |
 | `--check-server <report> [settings]` | HTTP 配信、Host/Origin 検証、保存反映、アイコン配信、実行ファイルパスの検知・更新 | 39 PASS |
 | `--check-watch <report> [settings]` | 退避・待機・再出現・復帰・失敗時の停止・エンジン解決 | 28 PASS |
 

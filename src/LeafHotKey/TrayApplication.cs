@@ -14,7 +14,6 @@ public sealed class TrayApplication : ApplicationContext
     private readonly ToolStripMenuItem _toggleItem;
 
     private readonly string? _settingsUrl;
-    private readonly Func<string>? _backendLabel;
     private readonly Func<string>? _statusText;
     private readonly Action? _toggle;
     private readonly Action? _startEngine;
@@ -26,7 +25,6 @@ public sealed class TrayApplication : ApplicationContext
         HostState state,
         ControlServer server,
         string? settingsUrl = null,
-        Func<string>? backendLabel = null,
         Func<string>? statusText = null,
         Action? toggle = null,
         Action? startEngine = null)
@@ -34,7 +32,6 @@ public sealed class TrayApplication : ApplicationContext
         _state = state;
         _server = server;
         _settingsUrl = settingsUrl;
-        _backendLabel = backendLabel;
         _statusText = statusText;
         _toggle = toggle;
         _startEngine = startEngine;
@@ -202,15 +199,13 @@ public sealed class TrayApplication : ApplicationContext
     private void UpdateSurface(RuntimeState next)
     {
         _toggleItem.Text = next == RuntimeState.Paused ? "再開" : "一時停止";
-        var backend = _backendLabel?.Invoke();
-        var suffix = string.IsNullOrEmpty(backend) || backend == "-" ? string.Empty : $" — {backend}";
         var stateText = _statusText?.Invoke() ?? next switch
         {
             RuntimeState.Running => "入力変換は有効",
             RuntimeState.Paused => "一時停止中",
             _ => "終了処理中",
         };
-        _icon.Text = $"LeafHotKey{suffix} — {stateText}";
+        _icon.Text = $"LeafHotKey — {stateText}";
     }
 
     protected override void Dispose(bool disposing)

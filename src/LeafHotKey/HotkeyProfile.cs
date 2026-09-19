@@ -43,7 +43,7 @@ public sealed class HotkeyRule
     /// <summary>Send の送信単位。Snd の第2引数は別要素として保持する。</summary>
     public IReadOnlyList<IReadOnlyList<SendToken>> Sequences { get; init; } = Array.Empty<IReadOnlyList<SendToken>>();
 
-    /// <summary>台帳に書かれていた送信文字列（AHK スクリプト生成でそのまま使う）。</summary>
+    /// <summary>送信内容の表記（Ctrl+Alt+g など）。画面とログの表示に使う。</summary>
     public IReadOnlyList<string> SequenceTexts { get; init; } = Array.Empty<string>();
 
     /// <summary>Hold で押し続ける修飾キー。</summary>
@@ -51,9 +51,6 @@ public sealed class HotkeyRule
 
     /// <summary>Hold を解除する契機となるキー。</summary>
     public string? ReleaseOn { get; init; }
-
-    /// <summary>Hold に {Blind} を付けるか。</summary>
-    public bool Blind { get; init; } = true;
 }
 
 /// <summary>アプリ単位のプロファイル。</summary>
@@ -84,7 +81,7 @@ public static class HotkeyProfileLoader
         return ReadProfiles(document.RootElement, path);
     }
 
-    /// <summary>設定 JSON の文字列から直接読む（AHK スクリプト生成などで使う）。</summary>
+    /// <summary>設定 JSON の文字列から直接読む。</summary>
     public static IReadOnlyList<HotkeyProfile> LoadJson(string json)
     {
         using var document = JsonDocument.Parse(json);
@@ -155,7 +152,7 @@ public static class HotkeyProfileLoader
                 Trigger = parsedTrigger,
                 Kind = kind,
                 SequenceTexts = ReadStrings(action, "sequence"),
-                Sequences = SendSequenceParser.ParseAll(ReadStrings(action, "sequence")),
+                Sequences = SendNotation.ParseAll(ReadStrings(action, "sequence")),
             },
             HotkeyActionKind.Hold => new HotkeyRule
             {
@@ -163,7 +160,6 @@ public static class HotkeyProfileLoader
                 Kind = kind,
                 HoldModifier = ReadHoldModifier(action),
                 ReleaseOn = ReadRequiredString(action, "releaseOn"),
-                Blind = !action.TryGetProperty("blind", out var blind) || blind.ValueKind != JsonValueKind.False,
             },
             _ => new HotkeyRule { Trigger = parsedTrigger, Kind = kind },
         };

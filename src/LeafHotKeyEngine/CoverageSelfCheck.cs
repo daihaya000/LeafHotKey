@@ -16,8 +16,7 @@ public static class CoverageSelfCheck
         {
             Sent.Add(string.Join(" ", tokens.Select(token => token.ToString())));
             return new SendResult { SentEvents = tokens.Count, Unresolved = Array.Empty<string>() };
-        }
-    }
+        }    }
 
     public static int Run(string? reportPath, string? settingsPath)
     {
@@ -121,7 +120,7 @@ public static class CoverageSelfCheck
                 .Select(sequence => string.Join(" ", sequence.Select(token => token.ToString())))
                 .ToList(),
             HotkeyActionKind.Hold when rule.HoldModifier is { } modifier
-                => new[] { $"{{{modifier}}} down", $"{{{modifier}}} up" }.ToList(),
+                => new[] { $"{modifier}↓", $"{modifier}↑" }.ToList(),
             _ => new List<string>(),
         };
 
@@ -142,9 +141,9 @@ public static class CoverageSelfCheck
         // Hold の前置キーは、組み合わせ入力中も押下状態を維持する。
         if (standalone.Kind == HotkeyActionKind.Hold && standalone.HoldModifier is { } prefixModifier)
         {
-            return new[] { $"{{{prefixModifier}}} down" }
+            return new[] { $"{prefixModifier}↓" }
                 .Concat(expected)
-                .Append($"{{{prefixModifier}}} up")
+                .Append($"{prefixModifier}↑")
                 .ToList();
         }
 

@@ -15,7 +15,7 @@ powershell -NoProfile -File scripts\Publish.ps1
 | ファイル | 役割 |
 | --- | --- |
 | `LeafHotKey.exe` | トレイ常駐の本体（WebUI とゲーム保護の監視。入力エンジンを起動・監督する） |
-| `LeafHotKeyEngine.exe` | 入力エンジン本体（入力フックと AHK バックエンド。ゲーム保護時はこれだけが退避する） |
+| `LeafHotKeyEngine.exe` | 入力エンジン本体（入力フックと入力変換。ゲーム保護時はこれだけが退避する） |
 | `wwwroot\` | 設定画面 |
 | `defaults\settings.json` | 既定設定（初回起動時のひな形） |
 

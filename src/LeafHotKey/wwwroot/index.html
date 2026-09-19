@@ -141,7 +141,6 @@
             <div class="page-intro"><p class="eyebrow">設定</p><h1 id="profiles-title">プロファイル</h1><p class="intro-copy">前面アプリごとのキー変換を管理します。変更は保存後に入力エンジンへ反映されます。</p></div>
             <div class="card">
               <div class="card-header"><div><h2>アプリ別の設定</h2><p class="fine" id="profile-count-label">設定を読み込んでいます。</p></div><span class="fine">編集すると未保存になります</span></div>
-              <div class="notice" id="profile-backend-notice" hidden><p>AutoHotkey バックエンド使用中：このプロファイルは入力変換に使われません（AHK 側のスクリプトが優先されます）。</p></div>
               <div class="profile-toolbar"><label class="profile-search" for="profile-search"><span class="sr-only">プロファイルを検索</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="profile-search" type="search" autocomplete="off" placeholder="アプリ名または実行ファイル名で検索" /></label><span class="fine" id="profile-results">-</span><button class="button button-primary button-small" type="button" id="add-profile">アプリを追加</button></div>              <div class="profile-table" role="region" aria-label="プロファイル一覧">
                 <div class="profile-table-header" aria-hidden="true"><span>アプリ</span><span>対象プロセス</span><span>ルール</span><span>状態</span><span></span></div>
                 <div id="profile-list"></div>
@@ -184,17 +183,6 @@
                 <div class="settings-row"><div class="settings-row-main"><strong>送信前に IME を無効化</strong><p>キー列を送る前に日本語入力をオフにします。</p></div><button class="switch" type="button" id="ime-disable" role="switch" aria-checked="false" aria-label="送信前に IME を無効化する"></button></div>
               </div>
             </section>
-            <section class="card" aria-labelledby="backend-heading">
-              <div class="card-header"><div><h2 id="backend-heading">入力バックエンド</h2><p class="fine">どちらか一方だけが動作します。切り替えるともう一方は停止します。</p></div><span class="badge" id="backend-state">-</span></div>
-              <div class="settings-list" style="margin-top:16px">
-                <div class="settings-row"><div class="settings-row-main"><strong>使用するエンジン</strong><p>不具合時は AutoHotkey に切り替えて従来のスクリプトで運用できます。</p></div><div class="field-inline"><select id="backend-mode" aria-label="入力バックエンド"><option value="builtin">内蔵エンジン</option><option value="ahk">AutoHotkey</option></select></div></div>
-                <div class="settings-row"><div class="settings-row-main"><strong>AHK の見守り</strong><p>AutoHotkey が落ちたら自動で起動し直します。スクリプトを編集すると読み直します（最大3回まで）。本体を終了しても AHK は動作を続けます。</p></div><span class="fine" id="backend-detail">-</span></div>
-                <div class="settings-row"><div class="settings-row-main"><strong>設定内容を書き出す</strong><p>プロファイルの内容から AHK 用スクリプトを生成し、実行するのは生成物にします（保存のたびに更新）。オフにすると指定したスクリプトをそのまま実行します。</p></div><button class="switch" type="button" id="backend-generate" role="switch" aria-checked="true" aria-label="設定内容を AHK 用スクリプトへ書き出す"></button></div>
-                <div class="settings-row"><div class="settings-row-main"><strong>生成先</strong><p>書き出されるファイルの場所です。</p></div><span class="fine" id="backend-generated">-</span></div>
-                <div class="settings-row"><div class="settings-row-main"><strong>AHK スクリプト</strong><p>実行する .ahk ファイルのフルパスです（生成の元になる場所でもあります）。</p></div><div class="field-inline field-inline-wide"><input type="text" id="backend-script" spellcheck="false" placeholder="C:/Users/…/MySet.ahk" aria-label="AHK スクリプトのパス" /></div></div>
-                <div class="settings-row"><div class="settings-row-main"><strong>AutoHotkey 本体</strong><p>空ならスクリプトと同じフォルダーから自動検出します。</p></div><div class="field-inline field-inline-wide"><input type="text" id="backend-executable" spellcheck="false" placeholder="空欄で自動検出" aria-label="AutoHotkey 本体のパス" /></div></div>
-              </div>
-            </section>
           </section>
 
           <section class="view" data-view="profile-detail" aria-labelledby="profile-detail-title">
@@ -225,8 +213,9 @@
                     <button class="button button-secondary button-small" type="button" id="add-rule">追加</button>
                   </div>
                 </div>
+                <p class="fine rule-hint">送信内容は <strong>Ctrl+Shift+g</strong> のように書きます。キーを押しっぱなしにする場合は <strong>Alt↓</strong> / <strong>Alt↑</strong>、文字を続けて送る場合は <strong>f 5</strong> のように空白で区切ります。</p>
                 <div class="rule-table" role="region" aria-label="ショートカット一覧">
-                  <div class="rule-table-head" aria-hidden="true"><span>前置</span><span>キー</span><span>修飾</span><span>動作</span><span>内容</span><span>* ~</span><span></span></div>
+                  <div class="rule-table-head" aria-hidden="true"><span>前置</span><span>キー</span><span>修飾</span><span>動作</span><span>内容</span><span>条件</span><span></span></div>
                   <div id="rule-list"></div>
                 </div>
                 <div class="empty-state" id="rule-empty" hidden><p>条件に合うショートカットがありません。</p></div>

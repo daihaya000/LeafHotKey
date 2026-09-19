@@ -62,11 +62,6 @@ public sealed class SendToken
     public static SendToken Char(char character, SendModifiers modifiers)
         => new(null, character, KeyAction.Press, modifiers);
 
-    public override string ToString()
-    {
-        var target = KeyName is not null ? "{" + KeyName + "}" : Character?.ToString() ?? "?";
-        var action = Action == KeyAction.Press ? string.Empty : " " + Action.ToString().ToLowerInvariant();
-        var modifiers = Modifiers == SendModifiers.None ? string.Empty : Modifiers + "+";
-        return modifiers + target + action;
-    }
+    /// <summary>ログや検証で使う表示。アプリの表記（Ctrl+Alt+g / Alt↓）で返す。</summary>
+    public override string ToString() => SendNotation.Format(new[] { this });
 }

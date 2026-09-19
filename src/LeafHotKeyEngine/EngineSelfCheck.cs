@@ -94,7 +94,7 @@ public static class EngineSelfCheck
         sink.Sent.Clear();
         var pgdn = engine.OnKeyDown("PgDn", SendModifiers.None);
         Check("send.suppress", pgdn == InputDecision.Suppress, "変換したキーは元の入力を抑止する");
-        Check("send.payload", sink.Sent.Count == 1 && sink.Sent[0] == "Alt+{Left}", $"PgDn は Alt+Left を送る（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("send.payload", sink.Sent.Count == 1 && sink.Sent[0] == "Alt+Left", $"PgDn は Alt+Left を送る（実際: {string.Join(" / ", sink.Sent)}）");
 
         // 修飾キーが違えばルールに一致しない。
         sink.Sent.Clear();
@@ -105,7 +105,7 @@ public static class EngineSelfCheck
         engine.SetActiveProfile(photoshop);
         sink.Sent.Clear();
         engine.OnKeyDown("PgDn", SendModifiers.None);
-        Check("send.split", sink.Sent.Count == 2 && sink.Sent[0] == "Ctrl+z" && sink.Sent[1] == "{Esc}", $"2回に分けて送る（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("send.split", sink.Sent.Count == 2 && sink.Sent[0] == "Ctrl+z" && sink.Sent[1] == "Esc", $"2回に分けて送る（実際: {string.Join(" / ", sink.Sent)}）");
 
         // 修飾キー付きトリガ（Photoshop ^+e）。
         sink.Sent.Clear();
@@ -116,7 +116,7 @@ public static class EngineSelfCheck
         engine.SetActiveProfile(explorer);
         sink.Sent.Clear();
         var holdDown = engine.OnKeyDown("f13", SendModifiers.None);
-        Check("hold.down", holdDown == InputDecision.Suppress && sink.Sent.Count == 1 && sink.Sent[0] == "{Shift} down", $"f13 で Shift を押す（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("hold.down", holdDown == InputDecision.Suppress && sink.Sent.Count == 1 && sink.Sent[0] == "Shift↓", $"f13 で Shift を押す（実際: {string.Join(" / ", sink.Sent)}）");
         Check("hold.active", engine.ActiveHoldModifiers.Contains("Shift"), "保持中の修飾キーを把握している");
 
         sink.Sent.Clear();
@@ -125,14 +125,14 @@ public static class EngineSelfCheck
 
         sink.Sent.Clear();
         var holdUp = engine.OnKeyUp("f13", SendModifiers.None);
-        Check("hold.up", holdUp == InputDecision.Suppress && sink.Sent.Count == 1 && sink.Sent[0] == "{Shift} up", $"離したら Shift を解放する（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("hold.up", holdUp == InputDecision.Suppress && sink.Sent.Count == 1 && sink.Sent[0] == "Shift↑", $"離したら Shift を解放する（実際: {string.Join(" / ", sink.Sent)}）");
         Check("hold.cleared", engine.ActiveHoldModifiers.Count == 0, "解放後は保持状態が残らない");
 
         // 保持中にアプリが切り替わっても解放する。
         sink.Sent.Clear();
         engine.OnKeyDown("f14", SendModifiers.None);
         engine.SetActiveProfile(chrome);
-        Check("hold.profile-switch", sink.Sent.Count == 2 && sink.Sent[1] == "{Ctrl} up", $"アプリ切替時に保持キーを解放する（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("hold.profile-switch", sink.Sent.Count == 2 && sink.Sent[1] == "Ctrl↑", $"アプリ切替時に保持キーを解放する（実際: {string.Join(" / ", sink.Sent)}）");
         Check("hold.switch.cleared", engine.ActiveHoldModifiers.Count == 0, "切替後に保持が残らない");
 
         // 停止・終了時の一括解放。
@@ -140,7 +140,7 @@ public static class EngineSelfCheck
         sink.Sent.Clear();
         engine.OnKeyDown("f16", SendModifiers.None);
         engine.ReleaseAll();
-        Check("hold.release-all", sink.Sent.Count == 2 && sink.Sent[1] == "{Space} up", $"ReleaseAll で解放する（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("hold.release-all", sink.Sent.Count == 2 && sink.Sent[1] == "Space↑", $"ReleaseAll で解放する（実際: {string.Join(" / ", sink.Sent)}）");
 
         // 前置キー（Clip Studio の MButton）。
         engine.SetActiveProfile(clipStudio);
@@ -149,7 +149,7 @@ public static class EngineSelfCheck
         Check("prefix.down", prefixDown == InputDecision.PassThrough, "*~MButton があるため中ボタンの元動作は通す");
         Check(
             "prefix.down.send",
-            sink.Sent.Count == 1 && sink.Sent[0] == "{Enter}",
+            sink.Sent.Count == 1 && sink.Sent[0] == "Enter",
             $"~ 付き前置キーの単体動作は押下時に発火する（実際: {string.Join(" / ", sink.Sent)}）");
         Check("prefix.held", engine.HeldPrefixes.Contains("MButton"), "前置キーを押下状態として保持する");
 
@@ -166,7 +166,7 @@ public static class EngineSelfCheck
         // 組み合わせを使わなければ単体動作（MButton → {Enter}）は押下時に 1 回だけ。
         sink.Sent.Clear();
         engine.OnKeyDown("MButton", SendModifiers.None);
-        Check("prefix.standalone.down", sink.Sent.Count == 1 && sink.Sent[0] == "{Enter}", $"単体の中ボタンは Enter を送る（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("prefix.standalone.down", sink.Sent.Count == 1 && sink.Sent[0] == "Enter", $"単体の中ボタンは Enter を送る（実際: {string.Join(" / ", sink.Sent)}）");
         sink.Sent.Clear();
         engine.OnKeyUp("MButton", SendModifiers.None);
         Check("prefix.standalone.up", sink.Sent.Count == 0, "解放時には同じ単体動作を繰り返さない");
@@ -174,13 +174,13 @@ public static class EngineSelfCheck
         // 前置キー + Hold（MButton & f13 は {Blind} なしの Ctrl 保持）。
         sink.Sent.Clear();
         engine.OnKeyDown("MButton", SendModifiers.None);
-        Check("prefix.hold.press", sink.Sent.Count == 1 && sink.Sent[0] == "{Enter}", "組み合わせ前の押下で単体動作が出る");
+        Check("prefix.hold.press", sink.Sent.Count == 1 && sink.Sent[0] == "Enter", "組み合わせ前の押下で単体動作が出る");
         sink.Sent.Clear();
         engine.OnKeyDown("f13", SendModifiers.None);
-        Check("prefix.hold", sink.Sent.Count == 1 && sink.Sent[0] == "{Ctrl} down", $"MButton & f13 は Ctrl を保持する（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("prefix.hold", sink.Sent.Count == 1 && sink.Sent[0] == "Ctrl↓", $"MButton & f13 は Ctrl を保持する（実際: {string.Join(" / ", sink.Sent)}）");
         sink.Sent.Clear();
         engine.OnKeyUp("f13", SendModifiers.None);
-        Check("prefix.hold.release", sink.Sent.Count == 1 && sink.Sent[0] == "{Ctrl} up", "f13 を離すと Ctrl を解放する");
+        Check("prefix.hold.release", sink.Sent.Count == 1 && sink.Sent[0] == "Ctrl↑", "f13 を離すと Ctrl を解放する");
         engine.OnKeyUp("MButton", SendModifiers.None);
 
         // f16 単体は Space を保持し、組み合わせ（f16 & Home）では Alt+] を送る。
@@ -188,13 +188,13 @@ public static class EngineSelfCheck
         var f16Down = engine.OnKeyDown("f16", SendModifiers.None);
         Check(
             "prefix.f16.hold.down",
-            f16Down == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "{Space} down",
+            f16Down == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "Space↓",
             $"f16 押下で Space を保持する（実際: {string.Join(" / ", sink.Sent)}）");
         sink.Sent.Clear();
         var f16Up = engine.OnKeyUp("f16", SendModifiers.None);
         Check(
             "prefix.f16.hold.up",
-            f16Up == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "{Space} up",
+            f16Up == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "Space↑",
             $"f16 解放で Space を解放する（実際: {string.Join(" / ", sink.Sent)}）");
 
         sink.Sent.Clear();
@@ -205,7 +205,7 @@ public static class EngineSelfCheck
         Check("prefix.f16.combo", sink.Sent.Count == 1 && sink.Sent[0] == "Alt+]", $"f16 & Home は Alt+] を送る（実際: {string.Join(" / ", sink.Sent)}）");
         sink.Sent.Clear();
         f16Up = engine.OnKeyUp("f16", SendModifiers.None);
-        Check("prefix.f16.up", f16Up == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "{Space} up", "組み合わせ済みの f16 解放で Space を解放する");
+        Check("prefix.f16.up", f16Up == InputDecision.PassThrough && sink.Sent.Count == 1 && sink.Sent[0] == "Space↑", "組み合わせ済みの f16 解放で Space を解放する");
 
         // 割り当ての無いキーは触らない。
         sink.Sent.Clear();
@@ -232,7 +232,7 @@ public static class EngineSelfCheck
         prefixEngine.OnKeyDown("f22", SendModifiers.None);
         Check(
             "prefix.physical.release",
-            prefixSink.Sent.Count == 1 && prefixSink.Sent[0] == "Shift, Alt+o",
+            prefixSink.Sent.Count == 1 && prefixSink.Sent[0] == "Shift+Alt+o",
             $"離れていれば単体の割り当てへ戻る（実際: {string.Join(" / ", prefixSink.Sent)}）");
 
         // 保持の取りこぼし対策（解除の見逃しを補う）。
@@ -242,13 +242,13 @@ public static class EngineSelfCheck
         Check("hold.map", engine.ActiveHolds.TryGetValue("f13", out var held) && held.Contains("Shift"), "解除キーごとに保持を追跡する");
         sink.Sent.Clear();
         engine.ReleaseHolds("f13");
-        Check("hold.force-release", sink.Sent.Count == 1 && sink.Sent[0] == "{Shift} up" && engine.ActiveHoldModifiers.Count == 0, $"見逃した解除を補って解放できる（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("hold.force-release", sink.Sent.Count == 1 && sink.Sent[0] == "Shift↑" && engine.ActiveHoldModifiers.Count == 0, $"見逃した解除を補って解放できる（実際: {string.Join(" / ", sink.Sent)}）");
 
         sink.Sent.Clear();
         engine.OnKeyDown("f14", SendModifiers.None);
         sink.Sent.Clear();
         engine.ReassertHolds(_ => false);
-        Check("hold.reassert", sink.Sent.Count == 1 && sink.Sent[0] == "{Ctrl} down", $"外れた保持を押し直せる（実際: {string.Join(" / ", sink.Sent)}）");
+        Check("hold.reassert", sink.Sent.Count == 1 && sink.Sent[0] == "Ctrl↓", $"外れた保持を押し直せる（実際: {string.Join(" / ", sink.Sent)}）");
         engine.ReleaseAll();
         Check("hold.release-all.cleared", engine.ActiveHoldModifiers.Count == 0, "解放後は保持が残らない");
 
@@ -269,7 +269,7 @@ public static class EngineSelfCheck
         stubbornEngine.OnKeyUp("f13", SendModifiers.None);
         Check(
             "hold.release-retry",
-            stubbornSink.Sent.Count == 2 && stubbornSink.Sent[0] == "{Shift} up" && stubbornSink.Sent[1] == "{Shift} up",
+            stubbornSink.Sent.Count == 2 && stubbornSink.Sent[0] == "Shift↑" && stubbornSink.Sent[1] == "Shift↑",
             $"解放が届かなければ送り直す（実際: {string.Join(" / ", stubbornSink.Sent)}）");
 
         // IME 無効化は設定で切り替えられ、保存時に反映される。
