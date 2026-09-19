@@ -28,9 +28,7 @@ public sealed class EngineControl : IHostControl
     /// <summary>エンジンが動作していないときに設定画面へ返す状態。</summary>
     private const string StoppedJson =
         "{\"state\":\"stopped\",\"engineInstalled\":false,\"activeProfile\":\"\",\"heldModifiers\":[]," +
-        "\"holdSweeps\":0,\"holdReasserts\":0,\"holdReleases\":0,\"backend\":\"builtin\",\"backendStatus\":\"停止中\"," +
-        "\"backendNote\":\"入力エンジンは停止しています。\",\"backendScript\":\"\",\"backendGenerated\":\"\"," +
-        "\"backendPid\":null,\"backendRestarts\":0}";
+        "\"holdSweeps\":0,\"holdReasserts\":0,\"holdReleases\":0}";
 
     private readonly string? _enginePath;
     private readonly int _shutdownTimeoutMs;

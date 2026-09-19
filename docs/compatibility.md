@@ -102,7 +102,7 @@
 | `--check-engine <report> [settings]` | 判定、前置キー、保持キーの解放、IME 設定 | 43 PASS |
 | `--check-hook <report>` | 実フック経由の変換・抑止・停止時解放 | 14 PASS |
 | `--check-coverage <report> [settings]` | 全 send / hold ルールを発火させて台帳と照合 | 243 件、不一致 0 |
-| `LeafHotKey.exe --check-profiles <report> [settings]` | 台帳の読込みと送信表記の解析 | 30 PASS（251ルール） |
+| `LeafHotKey.exe --check-profiles <report> [settings]` | 台帳の読込みと送信表記の解析 | 31 PASS（251ルール） |
 | `--check-settings <report> [settings]` | 保存、競合・不正拒否、破損からの復旧、旧形式の移行、検知した実行ファイルパスの追記・更新 | 44 PASS |
 | `--check-server <report> [settings]` | HTTP 配信、Host/Origin 検証、保存反映、アイコン配信、実行ファイルパスの検知・更新 | 39 PASS |
 | `--check-watch <report> [settings]` | 退避・待機・再出現・復帰・失敗時の停止・エンジン解決 | 28 PASS |

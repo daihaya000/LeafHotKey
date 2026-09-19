@@ -12,10 +12,18 @@ public static class SendNotation
     /// <summary>1 つの送信単位を解析する。</summary>
     public static IReadOnlyList<SendToken> Parse(string text)
     {
+        var parts = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         var tokens = new List<SendToken>();
-        foreach (var part in text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+
+        for (var index = 0; index < parts.Length; index++)
         {
-            tokens.AddRange(ParsePart(part, text));
+            // 「Ctrl + g」は別々のキーとして送られてしまうため、誤入力として弾く。
+            if (index + 1 < parts.Length && parts[index + 1] == "+" && IsModifierName(parts[index]))
+            {
+                throw new FormatException($"修飾キーは + で繋げてください（例: Ctrl+g）: {text}");
+            }
+
+            tokens.AddRange(ParsePart(parts[index], text));
         }
 
         if (tokens.Count == 0) throw new FormatException("送るキーが空です。");
@@ -37,6 +45,9 @@ public static class SendNotation
     /// <summary>複数の送信単位をまとめて表記へ戻す。</summary>
     public static IReadOnlyList<string> FormatAll(IEnumerable<IReadOnlyList<SendToken>> sequences)
         => sequences.Select(Format).ToList();
+
+    private static bool IsModifierName(string part)
+        => part.Trim().ToLowerInvariant() is "ctrl" or "control" or "shift" or "alt" or "win" or "lwin" or "rwin";
 
     private static IEnumerable<SendToken> ParsePart(string part, string text)
     {

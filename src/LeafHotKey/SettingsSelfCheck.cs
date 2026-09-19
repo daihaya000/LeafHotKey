@@ -56,7 +56,7 @@ public static class SettingsSelfCheck
             Check(
                 "schema.current",
                 first.Json.Contains($"\"schemaVersion\": {SettingsMigration.CurrentSchemaVersion}", StringComparison.Ordinal) &&
-                !first.Json.Contains("\"backend\"", StringComparison.Ordinal),
+                !first.Json.Contains("\"backend\":", StringComparison.Ordinal),
                 $"既定設定は現行形式（schemaVersion {SettingsMigration.CurrentSchemaVersion}）で、廃止した backend を持たない");
 
             var saved = store.Save(updated, first.Revision);

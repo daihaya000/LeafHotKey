@@ -138,6 +138,7 @@ public static class ProfileSelfCheck
         Check("parser.empty", Throws(() => SendNotation.Parse("  ")), "空の内容を拒否する");
         Check("parser.char-hold", Throws(() => SendNotation.Parse("g↓")), "文字は押しっぱなしにできない");
         Check("parser.space-separated", SendNotation.Parse("f 5").Count == 2, "空白区切りは別の文字として扱う");
+        Check("parser.spaced-modifier", Throws(() => SendNotation.Parse("Ctrl + g")), "空白入りの修飾は誤入力として弾く");
         Check("parser.plus", SendNotation.Parse("Ctrl++")[0].Character == '+' && SendNotation.Parse("+")[0].Character == '+', "「+」キーを修飾と区別できる");
 
         // 旧 AHK 表記の解析（設定ファイルの移行専用）。

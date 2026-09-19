@@ -46,8 +46,11 @@ public static class Program
                 return SendToHost(ControlProtocol.Resume);
             case "--shutdown":
                 return SendToHost(ControlProtocol.Shutdown);
-            default:
+            case "":
                 return RunHost();
+            default:
+                // 未知のフラグで本体を起動しない（削除済みの検証モードなどの誤実行を防ぐ）。
+                return mode.StartsWith('-') ? ExitCheckFailed : RunHost();
         }
     }
 

@@ -72,9 +72,9 @@ public static class SettingsMigration
         return root.ToJsonString(WriteOptions);
     }
 
-    /// <summary>現行形式かどうか。書き方の違いで取りこぼさないよう、値と backend の有無で判定する。</summary>
+    /// <summary>現行形式かどうか。書き方の違いで取りこぼさないよう、値と backend キーの有無で判定する。</summary>
     private static bool IsCurrent(string json)
-        => !json.Contains("\"backend\"", StringComparison.Ordinal) &&
+        => !json.Contains("\"backend\":", StringComparison.Ordinal) &&
            (json.Contains($"\"schemaVersion\": {CurrentSchemaVersion}", StringComparison.Ordinal) ||
             json.Contains($"\"schemaVersion\":{CurrentSchemaVersion}", StringComparison.Ordinal));
 

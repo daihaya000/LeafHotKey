@@ -74,12 +74,11 @@ Invoke-Build -Project $engineProject
 
 $results = @()
 
-# 入力エンジン（フック・送信・AHK）。
+# 入力エンジン（フック・送信・変換）。
 $results += Invoke-GuiCheck -Exe $engineExe -Mode '--check'
 $results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-hook'
 $results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-engine' -WithSettings
 $results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-send'
-$results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-backend'
 $results += Invoke-GuiCheck -Exe $engineExe -Mode '--check-coverage' -WithSettings
 
 # 本体（設定画面・ゲーム保護監視）。

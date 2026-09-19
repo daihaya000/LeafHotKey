@@ -36,8 +36,11 @@ public static class Program
                     args.Length > 2 ? args[2] : null);
             case "--run":
                 return RunEngine();
-            default:
+            case "":
                 return RunEngine();
+            default:
+                // 未知のフラグでエンジンを起動しない（削除済みの検証モードなどの誤実行を防ぐ）。
+                return mode.StartsWith('-') ? ExitFailed : RunEngine();
         }
     }
 
