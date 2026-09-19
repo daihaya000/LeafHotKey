@@ -23,6 +23,8 @@
   function showAlert(message) {
     alertBox.hidden = !message;
     alertBox.textContent = message || "";
+    // 長いページでは上部の警告が見えないまま操作が止まるため、出したら見える位置まで戻す。
+    if (message) alertBox.scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
   function setSaveState(message, kind) {
@@ -607,6 +609,12 @@
     }
 
     el("process-count-label").textContent = `${names.length}件`;
+    updateProcessWarning();
+  }
+
+  // 退避トリガが空だと保存できないため、条件が崩れたら先に知らせる。
+  function updateProcessWarning() {
+    const protection = settings?.gameProtection || {};
     const warning = el("process-warning");
     if (warning) warning.hidden = protection.enabled === false || (protection.stopTriggerProcessNames || []).length > 0;
   }
@@ -744,8 +752,8 @@
     protection.pollIntervalMs = Number(el("poll-interval").value);
     protection.resumeDelayMs = Number(el("resume-delay").value);
     markDirty();
-    renderProcessList();
     renderOverview();
+    updateProcessWarning();
     const summary = protection.enabled
       ? "ゲーム保護が有効です。危険なプロセスを検知すると入力エンジンを停止します。"
       : "ゲーム保護は無効です。危険なプロセスを検知しても退避しません。";
@@ -755,6 +763,8 @@
   // 実際にアイコンを出せた実行ファイルは、その場でフルパスを設定へ残す。
   const pendingPaths = new Set();
   let pathFlushScheduled = false;
+  // 追記要求は直列化する（保存と重なって版がずれるのを避ける）。
+  let pathMerge = Promise.resolve();
 
   function rememberAppPath(processName) {
     if (!processName || (settings?.appPaths || {})[processName]) return;
@@ -772,15 +782,19 @@
     }, 300);
   }
 
-  async function mergeAppPaths(names) {
-    if (!names.length) return;
+  function mergeAppPaths(names) {
+    if (!names.length) return pathMerge;
 
-    const result = await api("/api/app-paths", { method: "POST", body: JSON.stringify({ names }) });
-    if (result.status !== 200 || !result.payload) return;
+    pathMerge = pathMerge.then(async () => {
+      const result = await api("/api/app-paths", { method: "POST", body: JSON.stringify({ names }) });
+      if (result.status !== 200 || !result.payload) return;
 
-    settings.appPaths = { ...(settings.appPaths || {}), ...(result.payload.paths || {}) };
-    // サーバー側が追記して版が進むため、保持している版も合わせる。
-    if (result.payload.revision) revision = result.payload.revision;
+      settings.appPaths = { ...(settings.appPaths || {}), ...(result.payload.paths || {}) };
+      // サーバー側が追記して版が進むため、保持している版も合わせる。
+      if (result.payload.revision) revision = result.payload.revision;
+    });
+
+    return pathMerge;
   }
 
   // 起動中のアプリや App Paths からフルパスを拾い、アイコンを次回以降も出せるようにする。
@@ -807,10 +821,11 @@
       settings = JSON.parse(result.payload.json);
       revision = result.payload.revision;
       editingProfileIndex = null;
-      await detectAppPaths();
       renderAll();
       showAlert("");
       setSaveState("保存済み", "ok");
+      // 検知は表示を待たせない（アイコンは要求時に実行ファイルを探すため、後追いでも同じ結果になる）。
+      detectAppPaths();
     } catch (error) {
       showAlert(`設定を読み込めませんでした: ${error.message}`);
       setSaveState("読み込み失敗", "error");
@@ -897,6 +912,8 @@
 
   async function save() {
     if (!settings) return;
+    // 追記が終わってから版を読む（直後に 409 にならないようにする）。
+    await pathMerge;
     syncSettingsFromForms();
     const json = JSON.stringify(settings, null, 2);
 

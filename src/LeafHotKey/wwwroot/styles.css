@@ -611,6 +611,8 @@ input::placeholder, textarea::placeholder { color: var(--label-tertiary); }
   background: var(--surface);
   color: var(--danger);
   font-size: 14px;
+  /* スティッキーなトップバーの下に隠れないようにする。 */
+  scroll-margin-top: 72px;
 }
 .field textarea {
   width: 100%;

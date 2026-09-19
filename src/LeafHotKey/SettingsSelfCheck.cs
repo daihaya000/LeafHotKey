@@ -150,6 +150,16 @@ public static class SettingsSelfCheck
                 "apppaths.invalid-ignored",
                 brokenPaths.Success && !store.Load().AppPaths.ContainsKey("broken.exe"),
                 "exe 以外の値は読み込み時に無視する");
+
+            // 追記のたびに日本語が \uXXXX 表記へ置き換わらない（人が読める設定ファイルを保つ）。
+            var japanese = store.Load().Json.Replace("\"name\": \"Explorer\"", "\"name\": \"エクスプローラー\"", StringComparison.Ordinal);
+            Check("apppaths.text.prepared", store.Save(japanese, store.Load().Revision).Success, "日本語名を含む設定を用意できる");
+
+            var mergeJapanese = store.MergeAppPaths(new Dictionary<string, string> { ["notepad.exe"] = @"C:\Windows\System32\notepad.exe" });
+            Check(
+                "apppaths.text.kept",
+                mergeJapanese.Success && File.ReadAllText(settingsPath, encoding).Contains("エクスプローラー", StringComparison.Ordinal),
+                "追記しても日本語の表記をそのまま残す");
         }
         finally
         {

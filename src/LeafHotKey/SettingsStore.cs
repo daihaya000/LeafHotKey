@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -217,7 +218,7 @@ public sealed class SettingsStore
             {
                 root = JsonNode.Parse(snapshot.Json)?.AsObject() ?? throw new InvalidDataException("設定を読み込めません。");
             }
-            catch (JsonException ex)
+            catch (Exception ex) when (ex is JsonException or InvalidDataException)
             {
                 return new SaveResult { Status = SaveStatus.Invalid, Message = ex.Message };
             }
@@ -226,7 +227,9 @@ public sealed class SettingsStore
             root["appPaths"] = node;
             foreach (var (name, path) in merged) node[name] = path;
 
-            return Save(root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), expectedRevision: null);
+            // 日本語のプロファイル名などを \uXXXX へ変換せず、元の見た目で書き戻す。
+            var options = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+            return Save(root.ToJsonString(options), expectedRevision: null);
         }
     }
 
