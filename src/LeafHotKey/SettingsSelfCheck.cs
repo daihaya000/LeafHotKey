@@ -145,6 +145,14 @@ public static class SettingsSelfCheck
             var againPaths = store.MergeAppPaths(new Dictionary<string, string> { ["chrome.exe"] = chromePath });
             Check("apppaths.stable", againPaths.Revision == store.Load().Revision, "同じパスの再追記では版を変えない");
 
+            // アプリの更新・移動でパスが変わったら新しい方へ置き換える。
+            var movedPath = @"D:\Apps\chrome.exe";
+            var moved = store.MergeAppPaths(new Dictionary<string, string> { ["chrome.exe"] = movedPath });
+            Check(
+                "apppaths.updated",
+                moved.Success && store.Load().AppPaths.TryGetValue("chrome.exe", out var afterMove) && afterMove == movedPath,
+                "同じ名前で別のパスを検知したら新しい方へ更新する");
+
             var brokenPaths = store.MergeAppPaths(new Dictionary<string, string> { ["broken.exe"] = "not-a-path" });
             Check(
                 "apppaths.invalid-ignored",

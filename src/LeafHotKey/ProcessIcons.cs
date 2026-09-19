@@ -102,7 +102,7 @@ public static class ProcessIcons
 
     private static Icon? ExtractIcon(string path) => Icon.ExtractAssociatedIcon(path);
 
-    /// <summary>起動中のプロセス、次に App Paths から実行ファイルの場所を探す。</summary>
+    /// <summary>起動中のプロセス → App Paths → HKCR\Applications の順に実行ファイルの場所を探す。</summary>
     private static string? ResolvePath(string bare)
     {
         foreach (var process in Process.GetProcessesByName(bare))
@@ -137,6 +137,37 @@ public static class ProcessIcons
             }
         }
 
+        // インストール済みのアプリは HKEY_CLASSES_ROOT\Applications に登録されていることが多い。
+        try
+        {
+            using var key = Registry.ClassesRoot.OpenSubKey($@"Applications\{bare}.exe\shell\open\command");
+            if (key?.GetValue(null) is string command && ParseCommandPath(command) is { } path) return path;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+        }
+
         return null;
+    }
+
+    /// <summary>"C:\…\app.exe" "%1" のようなコマンド文字列から実行ファイルのパスを取り出す。</summary>
+    private static string? ParseCommandPath(string command)
+    {
+        var text = command.Trim();
+        if (text.Length == 0) return null;
+
+        string path;
+        if (text[0] == '"')
+        {
+            var end = text.IndexOf('"', 1);
+            if (end < 0) return null;
+            path = text[1..end];
+        }
+        else
+        {
+            path = text.Split(' ', 2)[0];
+        }
+
+        return File.Exists(path) ? path : null;
     }
 }

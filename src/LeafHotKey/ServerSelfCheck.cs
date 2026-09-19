@@ -186,6 +186,25 @@ public static class ServerSelfCheck
                 var detectInvalid = Send(server.Port, "POST", "/api/app-paths", host, origin, "{ broken");
                 Check("apppaths.invalid", detectInvalid.Status == 400, "壊れた本文は 400");
 
+                // 保存済みパスがまだ有効なら探し直さない（毎回の探索を避ける）。
+                var fakeExe = Path.Combine(workDirectory, "fake-app.exe");
+                File.WriteAllText(fakeExe, string.Empty, encoding);
+                store.MergeAppPaths(new Dictionary<string, string> { ["fake-app.exe"] = fakeExe });
+                Send(server.Port, "POST", "/api/app-paths", host, origin, JsonSerializer.Serialize(new { names = new[] { "fake-app.exe" } }));
+                Check(
+                    "apppaths.kept",
+                    store.Load().AppPaths.TryGetValue("fake-app.exe", out var keptPath) && keptPath == fakeExe,
+                    "有効な保存パスはそのまま残す");
+
+                // 無効になった保存パス（アプリの移動・削除）は検知し直す。
+                store.MergeAppPaths(new Dictionary<string, string> { ["LeafHotKey.exe"] = @"C:\missing\LeafHotKey.exe" });
+                Send(server.Port, "POST", "/api/app-paths", host, origin, JsonSerializer.Serialize(new { names = new[] { "LeafHotKey.exe" } }));
+                var refreshedPath = store.Load().AppPaths.TryGetValue("LeafHotKey.exe", out var refreshed) ? refreshed : null;
+                Check(
+                    "apppaths.refreshed",
+                    refreshedPath is not null && File.Exists(refreshedPath),
+                    $"無効になった保存パスは検知し直す（{refreshedPath}）");
+
                 Check(
                     "webui.port.fixed",
                     SettingsServer.DefaultPort == 17832,

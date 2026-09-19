@@ -99,9 +99,9 @@
 | `--check-backend <report>` | AHK バックエンドの解決、再起動判断、スクリプト追従 | 30 PASS |
 | `--check-coverage <report> [settings]` | 全 send / hold ルールを発火させて台帳と照合 | 243 件、不一致 0 |
 | `LeafHotKey.exe --check-profiles <report> [settings]` | 台帳の読込みと送信文字列の解析 | 25 PASS（251ルール） |
-| `--check-settings <report> [settings]` | 保存、競合・不正拒否、破損からの復旧、検知した実行ファイルパスの追記 | 36 PASS |
-| `--check-server <report> [settings]` | HTTP 配信、Host/Origin 検証、保存反映、アイコン配信、実行ファイルパスの検知 | 37 PASS |
-| `--check-watch <report> [settings]` | 退避・待機・再出現・復帰・失敗時の停止・エンジン解決 | 25 PASS |
+| `--check-settings <report> [settings]` | 保存、競合・不正拒否、破損からの復旧、検知した実行ファイルパスの追記・更新 | 38 PASS |
+| `--check-server <report> [settings]` | HTTP 配信、Host/Origin 検証、保存反映、アイコン配信、実行ファイルパスの検知・更新 | 38 PASS |
+| `--check-watch <report> [settings]` | 退避・待機・再出現・復帰・失敗時の停止・エンジン解決 | 28 PASS |
 
 ## 7. 意図的な差分（AHK と異なる点）
 

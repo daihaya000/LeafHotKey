@@ -33,13 +33,16 @@
   }
 
   async function api(path, options = {}) {
+    const { timeout, ...rest } = options;
     try {
       const response = await fetch(path, {
-        ...options,
+        ...rest,
         headers: {
-          ...(options.body ? { "Content-Type": "application/json" } : {}),
-          ...(options.headers || {}),
+          ...(rest.body ? { "Content-Type": "application/json" } : {}),
+          ...(rest.headers || {}),
         },
+        // 固まった要求で画面や保存が止まらないようにする。
+        signal: timeout ? timeoutSignal(timeout) : undefined,
       });
 
       const text = await response.text();
@@ -54,6 +57,15 @@
       return { status: response.status, payload };
     } catch (error) {
       return { status: 0, payload: { message: error.message || "接続できませんでした。" } };
+    }
+  }
+
+  function timeoutSignal(ms) {
+    try {
+      return AbortSignal.timeout(ms);
+    } catch (_) {
+      // 対応していないブラウザではタイムアウトなしで続ける。
+      return undefined;
     }
   }
 
@@ -786,7 +798,7 @@
     if (!names.length) return pathMerge;
 
     pathMerge = pathMerge.then(async () => {
-      const result = await api("/api/app-paths", { method: "POST", body: JSON.stringify({ names }) });
+      const result = await api("/api/app-paths", { method: "POST", body: JSON.stringify({ names }), timeout: 5000 });
       if (result.status !== 200 || !result.payload) return;
 
       settings.appPaths = { ...(settings.appPaths || {}), ...(result.payload.paths || {}) };
@@ -797,16 +809,16 @@
     return pathMerge;
   }
 
-  // 起動中のアプリや App Paths からフルパスを拾い、アイコンを次回以降も出せるようにする。
+  // 起動中のアプリ・App Paths・HKCR Applications からフルパスを拾い、アイコンを次回以降も出せるようにする。
+  // 保存済みパスが無効になった場合（アプリの更新・移動）も探し直せるよう、既知の名前もまとめて送る。
   async function detectAppPaths() {
     if (!settings) return;
-    const known = settings.appPaths || {};
     const names = new Set();
     (settings.profiles || []).forEach((profile) => (profile.processNames || []).forEach((name) => names.add(name)));
     const protection = settings.gameProtection || {};
     [...(protection.stopTriggerProcessNames || []), ...(protection.resumeProcessNames || [])].forEach((name) => names.add(name));
 
-    await mergeAppPaths([...names].filter((name) => name && !known[name]));
+    await mergeAppPaths([...names].filter(Boolean));
   }
 
   async function loadSettings() {

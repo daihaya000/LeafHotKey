@@ -276,8 +276,11 @@ public sealed class SettingsServer : IDisposable
                 }
 
                 var detected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var stored = _store.Load().AppPaths;
                 foreach (var name in names)
                 {
+                    // 保存済みパスがまだ有効なら探し直さない（更新・移動で無効になった場合だけ探す）。
+                    if (stored.TryGetValue(name, out var known) && File.Exists(known)) continue;
                     if (ProcessIcons.ResolveFullPath(name) is { } fullPath) detected[name] = fullPath;
                 }
 
