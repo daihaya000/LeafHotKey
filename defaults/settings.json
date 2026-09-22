@@ -23,6 +23,17 @@
   },
   "profiles": [
     {
+      "id": "rdp-ime",
+      "name": "RDP IME",
+      "enabled": true,
+      "processNames": ["mstsc.exe", "msrdc.exe"],
+      "source": "RdpImeKey.ini",
+      "rules": [
+        { "trigger": { "key": "Convert" }, "action": { "type": "send", "sequence": ["ZenkakuHankaku"] } },
+        { "trigger": { "key": "NonConvert" }, "action": { "type": "send", "sequence": ["Shift+ZenkakuHankaku"] } }
+      ]
+    },
+    {
       "id": "explorer",
       "name": "Explorer",
       "enabled": true,

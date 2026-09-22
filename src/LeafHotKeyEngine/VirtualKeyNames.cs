@@ -43,6 +43,9 @@ public static class VirtualKeyNames
             [0x28] = "Down",
             [0x13] = "Pause",
             [0x2C] = "PrintScreen",
+            [0x1C] = "Convert",
+            [0x1D] = "NonConvert",
+            [0xC0] = "ZenkakuHankaku",
         };
 
         for (var index = 1; index <= 24; index++)

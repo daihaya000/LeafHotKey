@@ -48,6 +48,9 @@ public static class KeyNames
         Add("Alt", "LAlt", "RAlt");
         Add("LWin");
         Add("RWin");
+        Add("Convert", "Henkan");
+        Add("NonConvert", "Muhenkan");
+        Add("ZenkakuHankaku", "HankakuZenkaku", "Zenkaku/Hankaku");
 
         // マウス入力（トリガ側で使う）。
         Add("LButton");

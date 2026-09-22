@@ -42,7 +42,7 @@ public static class SettingsSelfCheck
 
             var first = store.Load();
             Check("seed.created", File.Exists(settingsPath), "初回読み込みで既定設定から作られる");
-            Check("seed.contents", first.Profiles.Count == 13 && first.GameProtection.StopTriggerProcessNames.Count == 6, $"プロファイル {first.Profiles.Count} 件・停止対象 {first.GameProtection.StopTriggerProcessNames.Count} 件を読み込む");
+            Check("seed.contents", first.Profiles.Count == 14 && first.GameProtection.StopTriggerProcessNames.Count == 6, $"プロファイル {first.Profiles.Count} 件・停止対象 {first.GameProtection.StopTriggerProcessNames.Count} 件を読み込む");
 
             var again = store.Load();
             Check("revision.stable", first.Revision == again.Revision, "内容が変わらなければ版も変わらない");
@@ -115,7 +115,7 @@ public static class SettingsSelfCheck
             var fromDefaults = store.Load();
             Check(
                 "recover.defaults",
-                fromDefaults.GameProtection.PollIntervalMs == 1000 && fromDefaults.Profiles.Count == 13,
+                fromDefaults.GameProtection.PollIntervalMs == 1000 && fromDefaults.Profiles.Count == 14,
                 $"バックアップも壊れている場合は既定設定で復旧する（profiles={fromDefaults.Profiles.Count}）");
             Check("recover.defaults.file", File.ReadAllText(settingsPath, encoding) == fromDefaults.Json, "復旧内容を正本へ書き戻す");
 

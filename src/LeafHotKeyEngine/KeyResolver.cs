@@ -135,6 +135,9 @@ public static class KeyResolver
             ["Alt"] = 0x12,
             ["LWin"] = 0x5B,
             ["RWin"] = 0x5C,
+            ["Convert"] = 0x1C,
+            ["NonConvert"] = 0x1D,
+            ["ZenkakuHankaku"] = 0xC0,
         };
 
         for (var index = 1; index <= 24; index++)

@@ -42,10 +42,10 @@ public static class ProfileSelfCheck
             return 1;
         }
 
-        Check("profiles.count", profiles.Count == 13, $"プロファイル数 {profiles.Count}（期待 13）");
+        Check("profiles.count", profiles.Count == 14, $"プロファイル数 {profiles.Count}（期待 14）");
 
         var ruleCount = profiles.Sum(profile => profile.Rules.Count);
-        Check("rules.count", ruleCount == 251, $"ルール数 {ruleCount}（期待 251）");
+        Check("rules.count", ruleCount == 253, $"ルール数 {ruleCount}（期待 253）");
 
         var sendRules = profiles.SelectMany(p => p.Rules).Where(r => r.Kind == HotkeyActionKind.Send).ToList();
         Check("rules.send.nonempty", sendRules.All(r => r.Sequences.Count > 0 && r.Sequences.All(s => s.Count > 0)), "全 send ルールが空でないトークン列になる");
@@ -60,6 +60,15 @@ public static class ProfileSelfCheck
         Check("profile.match.case", profiles.Single(p => p.Id == "explorer").Matches("explorer.exe"), "exe 名の大文字小文字を区別しない");
         Check("profile.match.other", !profiles.Single(p => p.Id == "chrome").Matches("firefox.exe"), "対象外の exe には一致しない");
         Check("profile.unreal.multi", profiles.Single(p => p.Id == "unreal").ProcessNames.Count == 2, "UE は 2 つの exe を持つ");
+
+        var rdpIme = profiles.Single(p => p.Id == "rdp-ime");
+        Check("profile.rdp-ime", rdpIme.Matches("mstsc.exe") && rdpIme.Matches("msrdc.exe"), "RDP クライアントでプロファイルを選べる");
+        Check(
+            "parse.rdp-ime",
+            rdpIme.Rules.Count == 2 &&
+            rdpIme.Rules[0].Trigger.Key == "Convert" && rdpIme.Rules[0].Sequences[0][0].KeyName == "ZenkakuHankaku" &&
+            rdpIme.Rules[1].Trigger.Key == "NonConvert" && rdpIme.Rules[1].Sequences[0][0].Modifiers == SendModifiers.Shift,
+            "変換／無変換を半角／全角へ送る");
 
         // 個々の解析結果を元 AHK の表記と突き合わせる。
         var photoshop = profiles.Single(p => p.Id == "photoshop");

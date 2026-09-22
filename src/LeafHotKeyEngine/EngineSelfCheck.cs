@@ -81,6 +81,7 @@ public static class EngineSelfCheck
         var explorer = profiles.Single(profile => profile.Id == "explorer");
         var photoshop = profiles.Single(profile => profile.Id == "photoshop");
         var chrome = profiles.Single(profile => profile.Id == "chrome");
+        var rdpIme = profiles.Single(profile => profile.Id == "rdp-ime");
 
         var sink = new RecordingSink();
         var engine = new InputEngineCore(sink);
@@ -100,6 +101,17 @@ public static class EngineSelfCheck
         sink.Sent.Clear();
         var ctrlPgdn = engine.OnKeyDown("PgDn", SendModifiers.Ctrl);
         Check("send.modifier-mismatch", ctrlPgdn == InputDecision.PassThrough && sink.Sent.Count == 0, "Ctrl+PgDn は割り当て対象外として通過する");
+
+        // RDP: 変換 → 半角/全角、無変換 → Shift+半角/全角。
+        engine.SetActiveProfile(rdpIme);
+        sink.Sent.Clear();
+        var convert = engine.OnKeyDown("Convert", SendModifiers.None);
+        var nonConvert = engine.OnKeyDown("NonConvert", SendModifiers.None);
+        Check(
+            "rdp-ime.send",
+            convert == InputDecision.Suppress && nonConvert == InputDecision.Suppress &&
+            sink.Sent.SequenceEqual(new[] { "ZenkakuHankaku", "Shift+ZenkakuHankaku" }),
+            $"変換キーを RDP 用の半角/全角キー列へ置き換える（実際: {string.Join(" / ", sink.Sent)}）");
 
         // 分割送信（Photoshop PgDn → ^z, {Esc}）。
         engine.SetActiveProfile(photoshop);
@@ -257,8 +269,11 @@ public static class EngineSelfCheck
             "keys.virtual",
             KeyResolver.TryVirtualKeyFor("f13", out var f13) && f13 == 0x7C &&
             KeyResolver.TryVirtualKeyFor("MButton", out var mbutton) && mbutton == 0x04 &&
+            KeyResolver.TryVirtualKeyFor("Convert", out var convertKey) && convertKey == 0x1C &&
+            KeyResolver.TryVirtualKeyFor("ZenkakuHankaku", out var zenkakuHankaku) && zenkakuHankaku == 0xC0 &&
+            VirtualKeyNames.NameFor(0x1D) == "NonConvert" &&
             !KeyResolver.TryVirtualKeyFor("NoSuchKey", out _),
-            "保持キーの仮想キーを引ける");
+            "保持キーと RDP IME キーの仮想キーを引ける");
 
         // 解放が効かない環境でも固まらないよう、確認して送り直す。
         var stubbornSink = new StubbornSink();
