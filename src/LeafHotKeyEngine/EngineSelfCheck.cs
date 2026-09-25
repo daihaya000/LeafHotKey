@@ -139,6 +139,19 @@ public static class EngineSelfCheck
         var holdRepeatModified = engine.OnKeyDown("f13", SendModifiers.Shift);
         Check("hold.repeat.modified", holdRepeatModified == InputDecision.Suppress && sink.Sent.Count == 0, $"修飾キー付きのリピートも抑止する（実際: {string.Join(" / ", sink.Sent)}）");
 
+        // 保持中の別キーは、自分で押した修飾キーを除いて判定する（Painter f16 Alt 保持中の f14 → 2）。
+        var painter = profiles.Single(profile => profile.Id == "substance-painter");
+        var painterSink = new RecordingSink();
+        var painterEngine = new InputEngineCore(painterSink);
+        painterEngine.SetActiveProfile(painter);
+        painterEngine.OnKeyDown("f16", SendModifiers.None);
+        painterSink.Sent.Clear();
+        var heldF14 = painterEngine.OnKeyDown("f14", SendModifiers.Alt);
+        painterEngine.OnKeyUp("f14", SendModifiers.Alt);
+        Check("hold.other-key", heldF14 == InputDecision.Suppress && painterSink.Sent.Count == 1 && painterSink.Sent[0] == "2", $"Alt 保持中でも f14 の割り当てが効く（実際: {string.Join(" / ", painterSink.Sent)}）");
+        painterEngine.OnKeyUp("f16", SendModifiers.Alt);
+        Check("hold.other-key.release", painterEngine.ActiveHoldModifiers.Count == 0 && painterSink.Sent.LastOrDefault() == "Alt↑", "f16 を離すと Alt を解放する");
+
         sink.Sent.Clear();
         var holdUp = engine.OnKeyUp("f13", SendModifiers.None);
         Check("hold.up", holdUp == InputDecision.Suppress && sink.Sent.Count == 1 && sink.Sent[0] == "Shift↑", $"離したら Shift を解放する（実際: {string.Join(" / ", sink.Sent)}）");

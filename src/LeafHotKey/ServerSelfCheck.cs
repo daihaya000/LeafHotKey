@@ -228,7 +228,7 @@ public static class ServerSelfCheck
                 Check("webui.save", applyResult.Status == 200, "WebUI 経由の保存が通る");
                 Check(
                     "webui.applied",
-                    applied is not null && applied.Profiles.Count == 13 && applied.GameProtection.ResumeDelayMs == 1500,
+                    applied is not null && applied.Profiles.Count == snapshot2.Profiles.Count && applied.GameProtection.ResumeDelayMs == 1500,
                     "保存後に新しい設定が呼び出し側へ渡る");
             }
         }

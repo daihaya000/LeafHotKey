@@ -231,7 +231,9 @@ public sealed class InputEngineCore
         Trace?.Invoke($"down {key} mods={modifiers} profile={profile?.Id ?? "-"} prefixes=[{string.Join(",", _heldPrefixes.Keys)}] holds=[{string.Join(",", _activeHolds.Values.SelectMany(list => list))}]");
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
 
-        // 保持中の解除キーのリピートは、自分で押した修飾キーが付いて届くため規則に一致しない。
+        modifiers = WithoutHeldModifiers(modifiers);
+
+        // 保持中の解除キーのリピートは、他の修飾キーが加わっても必ず抑止する。
         // 通すとアプリに Alt+f16 等の押下だけが届き、解放が抑止されて押しっぱなし扱いになる。
         if (_activeHolds.TryGetValue(key, out var heldModifiers))
         {
@@ -317,6 +319,8 @@ public sealed class InputEngineCore
         var profile = _activeProfile;
         Trace?.Invoke($"up   {key} mods={modifiers} profile={profile?.Id ?? "-"} holds=[{string.Join(",", _activeHolds.Values.SelectMany(list => list))}]");
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
+
+        modifiers = WithoutHeldModifiers(modifiers);
 
         // 押下を抑止したキーは、解放も抑止して対を揃える。
         var decision = _suppressedDownKeys.Remove(key) ? InputDecision.Suppress : InputDecision.PassThrough;
@@ -413,6 +417,27 @@ public sealed class InputEngineCore
         }
 
         return rule.Trigger.PassThroughNative ? InputDecision.PassThrough : InputDecision.Suppress;
+    }
+
+    /// <summary>
+    /// 自分で保持している修飾キーを判定から除く（AHK は自分の送信を修飾状態に数えない）。
+    /// 除かないと Alt 保持中の f14 が Alt+f14 扱いになり、割り当てが効かなくなる。
+    /// </summary>
+    private SendModifiers WithoutHeldModifiers(SendModifiers modifiers)
+    {
+        foreach (var modifier in _activeHolds.Values.SelectMany(list => list))
+        {
+            modifiers &= ~(modifier.ToUpperInvariant() switch
+            {
+                "CTRL" => SendModifiers.Ctrl,
+                "SHIFT" => SendModifiers.Shift,
+                "ALT" => SendModifiers.Alt,
+                "LWIN" or "RWIN" => SendModifiers.Win,
+                _ => SendModifiers.None,
+            });
+        }
+
+        return modifiers;
     }
 
     private static HotkeyRule? FindRule(HotkeyProfile profile, Func<HotkeyRule, bool> predicate)
