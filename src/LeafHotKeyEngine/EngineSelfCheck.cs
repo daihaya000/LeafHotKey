@@ -135,6 +135,10 @@ public static class EngineSelfCheck
         var holdRepeat = engine.OnKeyDown("f13", SendModifiers.None);
         Check("hold.repeat", holdRepeat == InputDecision.Suppress && sink.Sent.Count == 0, "キーリピートで Shift を二重に押さない");
 
+        // 実際のリピートは保持した修飾キー付きで届く。アプリへ通さない。
+        var holdRepeatModified = engine.OnKeyDown("f13", SendModifiers.Shift);
+        Check("hold.repeat.modified", holdRepeatModified == InputDecision.Suppress && sink.Sent.Count == 0, $"修飾キー付きのリピートも抑止する（実際: {string.Join(" / ", sink.Sent)}）");
+
         sink.Sent.Clear();
         var holdUp = engine.OnKeyUp("f13", SendModifiers.None);
         Check("hold.up", holdUp == InputDecision.Suppress && sink.Sent.Count == 1 && sink.Sent[0] == "Shift↑", $"離したら Shift を解放する（実際: {string.Join(" / ", sink.Sent)}）");

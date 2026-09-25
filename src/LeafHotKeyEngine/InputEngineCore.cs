@@ -231,6 +231,21 @@ public sealed class InputEngineCore
         Trace?.Invoke($"down {key} mods={modifiers} profile={profile?.Id ?? "-"} prefixes=[{string.Join(",", _heldPrefixes.Keys)}] holds=[{string.Join(",", _activeHolds.Values.SelectMany(list => list))}]");
         if (profile is null || !profile.Enabled) return InputDecision.PassThrough;
 
+        // 保持中の解除キーのリピートは、自分で押した修飾キーが付いて届くため規則に一致しない。
+        // 通すとアプリに Alt+f16 等の押下だけが届き、解放が抑止されて押しっぱなし扱いになる。
+        if (_activeHolds.TryGetValue(key, out var heldModifiers))
+        {
+            foreach (var modifier in heldModifiers)
+            {
+                if (!_sink.VerifyKeyDown(modifier))
+                {
+                    _sink.Send(new[] { SendToken.Key(modifier, KeyAction.Down, SendModifiers.None) });
+                }
+            }
+
+            return HasPassthrough(profile, key) ? InputDecision.PassThrough : InputDecision.Suppress;
+        }
+
         // 前置キーの押下/解放を取りこぼしても、物理状態が正なら前置として扱う（AHK と同じ発想）。
         SyncPrefixes(profile);
 
