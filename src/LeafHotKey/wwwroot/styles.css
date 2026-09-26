@@ -692,7 +692,7 @@ input::placeholder, textarea::placeholder { color: var(--label-tertiary); }
 .field-inline-wide { min-width: 320px; }
 .field-inline-wide input { width: 100%; font-size: 13px; }
 .field-inline select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--separator); border-radius: 10px; background: var(--surface); color: var(--label); font-size: 13px; }
-.event-log { max-height: 224px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--separator); border-radius: 12px; background: var(--surface-secondary); color: var(--label-secondary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow: auto; }
+.event-log { max-height: 320px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--separator); border-radius: 12px; background: var(--surface-secondary); color: var(--label-secondary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow: auto; }
 .actions {
   position: sticky;
   bottom: 0;
